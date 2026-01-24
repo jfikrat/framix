@@ -1,0 +1,24 @@
+{
+  "name": "framix",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "server": "bun run server.ts",
+    "dev:full": "bun run dev & bun run server",
+    "render": "bun run render.ts",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "puppeteer": "^24.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.1.2",
+    "typescript": "^5.0.0",
+    "vite": "^7.3.1"
+  }
+}
