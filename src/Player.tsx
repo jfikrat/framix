@@ -1,20 +1,41 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import type { VideoConfig } from "./animations";
+import type { AudioTrack } from "./audio/types";
+import { AudioPreview } from "./audio/preview";
 
 interface PlayerProps {
   children: (frame: number) => React.ReactNode;
   config: VideoConfig;
+  audioTrack?: AudioTrack;
 }
 
-export const Player: React.FC<PlayerProps> = ({ children, config }) => {
+export const Player: React.FC<PlayerProps> = ({ children, config, audioTrack }) => {
   const [frame, setFrame] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [actualFps, setActualFps] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
   const lastTimeRef = useRef<number>(0);
   const frameCountRef = useRef<number>(0);
+  const audioRef = useRef<AudioPreview | null>(null);
 
   const { fps, width, height, durationInFrames } = config;
   const scale = Math.min(420 / width, 750 / height);
+
+  // Audio preview init
+  useEffect(() => {
+    if (!audioTrack) return;
+    const preview = new AudioPreview(audioTrack, durationInFrames, fps);
+    audioRef.current = preview;
+    return () => {
+      preview.dispose();
+      audioRef.current = null;
+    };
+  }, [audioTrack, durationInFrames, fps]);
+
+  // Sync mute state
+  useEffect(() => {
+    audioRef.current?.setMuted(isMuted);
+  }, [isMuted]);
 
   // Animation loop
   useEffect(() => {
@@ -32,6 +53,7 @@ export const Player: React.FC<PlayerProps> = ({ children, config }) => {
           const next = prev + 1;
           if (next >= durationInFrames) {
             setIsPlaying(false);
+            audioRef.current?.stop();
             return 0;
           }
           return next;
@@ -50,22 +72,39 @@ export const Player: React.FC<PlayerProps> = ({ children, config }) => {
     };
 
     animationId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animationId);
+    return () => {
+      cancelAnimationFrame(animationId);
+    };
   }, [isPlaying, fps, durationInFrames]);
 
   const handlePlayPause = useCallback(() => {
-    if (frame >= durationInFrames - 1) setFrame(0);
-    setIsPlaying((prev) => !prev);
+    if (frame >= durationInFrames - 1) {
+      setFrame(0);
+      audioRef.current?.seekToFrame(0);
+    }
+    setIsPlaying((prev) => {
+      const next = !prev;
+      if (next) {
+        audioRef.current?.play(frame >= durationInFrames - 1 ? 0 : frame);
+      } else {
+        audioRef.current?.pause();
+      }
+      return next;
+    });
   }, [frame, durationInFrames]);
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFrame(parseInt(e.target.value, 10));
+    const newFrame = parseInt(e.target.value, 10);
+    setFrame(newFrame);
     setIsPlaying(false);
+    audioRef.current?.pause();
+    audioRef.current?.seekToFrame(newFrame);
   };
 
   const handleReset = () => {
     setFrame(0);
     setIsPlaying(false);
+    audioRef.current?.stop();
   };
 
   const currentTime = (frame / fps).toFixed(2);
@@ -170,6 +209,24 @@ export const Player: React.FC<PlayerProps> = ({ children, config }) => {
           >
             ⏮
           </button>
+
+          {audioTrack && (
+            <button
+              onClick={() => setIsMuted((m) => !m)}
+              style={{
+                padding: "10px 14px",
+                fontSize: 15,
+                background: isMuted ? "#4a1a1a" : "#2a2a2a",
+                border: "none",
+                borderRadius: 8,
+                color: isMuted ? "#e53e3e" : "white",
+                cursor: "pointer",
+              }}
+              title={isMuted ? "Unmute" : "Mute"}
+            >
+              {isMuted ? "🔇" : "🔊"}
+            </button>
+          )}
 
           {/* Stats */}
           <div style={{ marginLeft: "auto", display: "flex", gap: 16, fontSize: 13, color: "#888" }}>

@@ -3,12 +3,14 @@ import { Player } from "./Player";
 import { RenderProgressModal } from "./components/RenderProgressModal";
 import { presets, type VideoConfig, type AnimationProps } from "./animations";
 import type { TemplateMeta } from "./templates/types";
+import type { AudioTrack } from "./audio/types";
 
 // 🔥 OTOMATİK TEMPLATE TARAMA - Vite glob import
 const templateModules = import.meta.glob<{
   meta: TemplateMeta;
+  audioTrack?: AudioTrack;
   default?: React.FC<AnimationProps>;
-  [key: string]: React.FC<AnimationProps> | TemplateMeta | undefined;
+  [key: string]: React.FC<AnimationProps> | TemplateMeta | AudioTrack | undefined;
 }>("./templates/*.tsx", { eager: true });
 
 // Template'leri parse et
@@ -18,6 +20,8 @@ interface Template {
   category: string;
   color: string;
   component: React.FC<AnimationProps>;
+  configOverride?: Partial<VideoConfig>;
+  audioTrack?: AudioTrack;
 }
 
 function loadTemplates(): Template[] {
@@ -38,12 +42,17 @@ function loadTemplates(): Template[] {
     const component = module.default || (componentName ? module[componentName] : null);
     if (!component || typeof component !== "function") continue;
 
+    const templateConfig = (module as Record<string, unknown>).templateConfig as Partial<VideoConfig> | undefined;
+    const audioTrack = (module as Record<string, unknown>).audioTrack as AudioTrack | undefined;
+
     templates.push({
       id: meta.id,
       name: meta.name,
       category: meta.category,
       color: meta.color,
       component: component as React.FC<AnimationProps>,
+      configOverride: templateConfig,
+      audioTrack,
     });
   }
 
@@ -88,6 +97,7 @@ export const Gallery: React.FC = () => {
 
   const selected = templates.find((t) => t.id === selectedId) || templates[0];
   const TemplateComponent = selected?.component;
+  const activeConfig = selected?.configOverride ? { ...config, ...selected.configOverride } : config;
 
   if (!templates.length) {
     return <div style={{ color: "white", padding: 40 }}>No templates found</div>;
@@ -149,8 +159,8 @@ export const Gallery: React.FC = () => {
         {/* Player */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
           {TemplateComponent && (
-            <Player config={config}>
-              {(frame) => <TemplateComponent frame={frame} config={config} />}
+            <Player config={activeConfig} audioTrack={selected.audioTrack} key={selected.id}>
+              {(frame) => <TemplateComponent frame={frame} config={activeConfig} />}
             </Player>
           )}
 
