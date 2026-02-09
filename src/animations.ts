@@ -7,15 +7,19 @@ export function interpolate(
   value: number,
   inputRange: [number, number],
   outputRange: [number, number],
-  options?: { clamp?: boolean }
+  options?: { clamp?: boolean; easing?: (t: number) => number }
 ): number {
   const [inputMin, inputMax] = inputRange;
   const [outputMin, outputMax] = outputRange;
 
   let progress = (value - inputMin) / (inputMax - inputMin);
 
-  if (options?.clamp) {
+  if (options?.clamp !== false) {
     progress = Math.max(0, Math.min(1, progress));
+  }
+
+  if (options?.easing) {
+    progress = options.easing(progress);
   }
 
   return outputMin + progress * (outputMax - outputMin);

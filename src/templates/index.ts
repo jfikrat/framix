@@ -6,6 +6,9 @@ export { SplitScreen } from "./SplitScreen";
 export { KineticType } from "./KineticType";
 export { GradientWave } from "./GradientWave";
 export { MinimalQuote } from "./MinimalQuote";
+export { CobrainPromo } from "./CobrainPromo";
+export { AITimeline } from "./AITimeline";
+export { AITimelineGSAP } from "./AITimelineGSAP";
 
 // Template metadata
 export interface TemplateInfo {
@@ -51,5 +54,23 @@ export const templates: TemplateInfo[] = [
     name: "Minimal Quote",
     description: "Minimalist alıntı animasyonu",
     category: "quote",
+  },
+  {
+    id: "cobrain-promo",
+    name: "Cobrain Promo",
+    description: "Cobrain AI asistan tanıtım reeli — 15 saniyelik ses senkronlu promosyon",
+    category: "promo",
+  },
+  {
+    id: "ai-timeline",
+    name: "AI Timeline Tweet",
+    description: "Tweet animasyonu — bullet list + kapanış cümlesi, Cobrain branding",
+    category: "promo",
+  },
+  {
+    id: "ai-timeline-gsap",
+    name: "AI Timeline (GSAP)",
+    description: "AI Timeline'ın GSAP ile yeniden yazımı — back, elastic, expo easing'ler",
+    category: "promo",
   },
 ];

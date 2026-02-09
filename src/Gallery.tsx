@@ -59,6 +59,14 @@ function loadTemplates(): Template[] {
   return templates.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+const categoryBadge: Record<string, { label: string; color: string }> = {
+  promo: { label: "P", color: "#8b5cf6" },
+  dynamic: { label: "D", color: "#f59e0b" },
+  celebration: { label: "C", color: "#ec4899" },
+  memorial: { label: "M", color: "#6b7280" },
+  social: { label: "S", color: "#3b82f6" },
+};
+
 const config: VideoConfig = presets.instagramStory;
 
 export const Gallery: React.FC = () => {
@@ -66,6 +74,8 @@ export const Gallery: React.FC = () => {
   const [selectedId, setSelectedId] = useState(templates[0]?.id || "");
   const [renderJobId, setRenderJobId] = useState<string | null>(null);
   const [isRendering, setIsRendering] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const handleCloseModal = () => {
     setRenderJobId(null);
@@ -106,85 +116,163 @@ export const Gallery: React.FC = () => {
   return (
     <div style={{ minHeight: "100vh", background: "#0a0a0a", color: "white", padding: 20 }}>
       {/* Header */}
-      <h1 style={{ textAlign: "center", fontSize: 28, fontWeight: 700, marginBottom: 8 }}>
-        🎬 Framix
-      </h1>
-      <p style={{ textAlign: "center", fontSize: 14, color: "#666", marginBottom: 24 }}>
-        Instagram Story • {templates.length} template •
-        <span style={{ color: "#22c55e", marginLeft: 8 }}>✨ Auto-discovery</span>
-      </p>
+      {!isFullscreen && (
+        <>
+          <h1 style={{ textAlign: "center", fontSize: 28, fontWeight: 700, marginBottom: 8 }}>
+            🎬 Framix
+          </h1>
+          <p style={{ textAlign: "center", fontSize: 14, color: "#666", marginBottom: 24 }}>
+            Instagram Story • {templates.length} template •
+            <span style={{ color: "#22c55e", marginLeft: 8 }}>✨ Auto-discovery</span>
+          </p>
+        </>
+      )}
 
       {/* Main layout */}
-      <div style={{ display: "flex", gap: 20, maxWidth: 1200, margin: "0 auto" }}>
+      <div style={{ display: isFullscreen ? "block" : "flex", gap: 20, maxWidth: 1200, margin: "0 auto" }}>
         {/* Sidebar */}
-        <div style={{ width: 260, background: "#111", borderRadius: 12, padding: 16 }}>
-          <h3 style={{ fontSize: 12, color: "#666", marginBottom: 16, textTransform: "uppercase", letterSpacing: 2 }}>
-            Templates ({templates.length})
-          </h3>
-          {templates.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setSelectedId(t.id)}
+        {!isFullscreen && (
+          <div
+            style={{
+              width: 250,
+              background: "#111",
+              borderRadius: 12,
+              padding: "12px 8px",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <h3
               style={{
-                width: "100%",
-                padding: 14,
-                marginBottom: 8,
-                background: selectedId === t.id ? "#222" : "transparent",
-                border: selectedId === t.id ? `2px solid ${t.color}` : "2px solid transparent",
-                borderRadius: 8,
-                color: "white",
-                cursor: "pointer",
-                textAlign: "left",
-                transition: "all 0.15s",
+                fontSize: 11,
+                color: "#555",
+                marginBottom: 10,
+                textTransform: "uppercase",
+                letterSpacing: 2,
+                padding: "0 8px",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 14, height: 14, borderRadius: 4, background: t.color }} />
-                <span style={{ fontWeight: 600, fontSize: 14 }}>{t.name}</span>
-              </div>
-              <div style={{ fontSize: 11, color: "#555", marginTop: 4, marginLeft: 24, textTransform: "uppercase" }}>
-                {t.category}
-              </div>
-            </button>
-          ))}
+              Templates ({templates.length})
+            </h3>
 
-          {/* Info */}
-          <div style={{ marginTop: 20, padding: 12, background: "#0a0a0a", borderRadius: 8, fontSize: 12, color: "#555" }}>
-            <div style={{ color: "#22c55e", marginBottom: 6 }}>✨ Otomatik Tarama</div>
-            <div>src/templates/*.tsx</div>
-            <div style={{ marginTop: 4, color: "#444" }}>Yeni dosya ekle → anında görünür</div>
+            <div style={{ overflowY: "auto", maxHeight: "calc(100vh - 220px)", flex: 1 }}>
+              {templates.map((t) => {
+                const isActive = selectedId === t.id;
+                const isHovered = hoveredId === t.id;
+                const badge = categoryBadge[t.category.toLowerCase()];
+
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setSelectedId(t.id)}
+                    onMouseEnter={() => setHoveredId(t.id)}
+                    onMouseLeave={() => setHoveredId(null)}
+                    style={{
+                      width: "100%",
+                      padding: "9px 12px",
+                      marginBottom: 2,
+                      background: isActive
+                        ? `${t.color}12`
+                        : isHovered
+                          ? "#1a1a1a"
+                          : "transparent",
+                      border: "none",
+                      borderLeft: `3px solid ${isActive ? t.color : "transparent"}`,
+                      borderRadius: "0 6px 6px 0",
+                      color: "white",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      transition: "all 0.12s",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontWeight: isActive ? 600 : 400,
+                        fontSize: 13,
+                        color: isActive ? "#fff" : "#bbb",
+                      }}
+                    >
+                      {t.name}
+                    </span>
+                    {badge && (
+                      <span
+                        style={{
+                          fontSize: 9,
+                          fontWeight: 700,
+                          color: badge.color,
+                          background: `${badge.color}18`,
+                          padding: "2px 5px",
+                          borderRadius: 3,
+                          letterSpacing: 0.5,
+                          flexShrink: 0,
+                          marginLeft: 8,
+                        }}
+                      >
+                        {badge.label}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Info */}
+            <div
+              style={{
+                marginTop: 12,
+                padding: "10px 12px",
+                background: "#0a0a0a",
+                borderRadius: 8,
+                fontSize: 11,
+                color: "#444",
+              }}
+            >
+              <span style={{ color: "#22c55e" }}>✨</span>{" "}
+              <span style={{ color: "#555" }}>src/templates/*.tsx</span>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Player */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
           {TemplateComponent && (
-            <Player config={activeConfig} audioTrack={selected.audioTrack} key={selected.id}>
+            <Player
+              config={activeConfig}
+              audioTrack={selected.audioTrack}
+              key={selected.id}
+              isFullscreen={isFullscreen}
+              onFullscreenChange={setIsFullscreen}
+            >
               {(frame) => <TemplateComponent frame={frame} config={activeConfig} />}
             </Player>
           )}
 
           {/* Render Button */}
-          <button
-            onClick={handleRender}
-            disabled={isRendering || !selectedId}
-            style={{
-              marginTop: 16,
-              padding: "12px 32px",
-              fontSize: 16,
-              fontWeight: 600,
-              background: isRendering ? "#333" : "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
-              color: "white",
-              border: "none",
-              borderRadius: 8,
-              cursor: isRendering ? "not-allowed" : "pointer",
-              opacity: isRendering ? 0.7 : 1,
-              transition: "all 0.2s",
-              boxShadow: isRendering ? "none" : "0 4px 14px rgba(34, 197, 94, 0.4)",
-            }}
-          >
-            {isRendering ? "⏳ Rendering..." : "🎬 Render Video"}
-          </button>
+          {!isFullscreen && (
+            <button
+              onClick={handleRender}
+              disabled={isRendering || !selectedId}
+              style={{
+                marginTop: 16,
+                padding: "12px 32px",
+                fontSize: 16,
+                fontWeight: 600,
+                background: isRendering ? "#333" : "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+                color: "white",
+                border: "none",
+                borderRadius: 8,
+                cursor: isRendering ? "not-allowed" : "pointer",
+                opacity: isRendering ? 0.7 : 1,
+                transition: "all 0.2s",
+                boxShadow: isRendering ? "none" : "0 4px 14px rgba(34, 197, 94, 0.4)",
+              }}
+            >
+              {isRendering ? "⏳ Rendering..." : "🎬 Render Video"}
+            </button>
+          )}
         </div>
       </div>
 

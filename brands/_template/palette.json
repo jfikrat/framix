@@ -1,0 +1,17 @@
+{
+  "brand": "MARKA_ADI",
+  "colors": {
+    "primary": "#000000",
+    "secondary": "#000000",
+    "background": "#0a0a0a",
+    "surface": "#111111",
+    "textPrimary": "#f5f5f5",
+    "textSecondary": "#8b8b8b",
+    "accent": "#000000"
+  },
+  "gradients": {},
+  "typography": {
+    "heading": { "family": "", "weight": "800" },
+    "body": { "family": "", "weight": "400" }
+  }
+}
