@@ -8,6 +8,7 @@ import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import type { AnimationProps, VideoConfig } from "../../animations";
 import { interpolate, spring } from "../../animations";
 import { FramixCanvas } from "../../three";
+import { useCamera } from "../../camera";
 import type { ProjectMeta, TimelineSegment } from "../types";
 import { RobotAssembly } from "./RobotParts";
 import { AssemblyParticles } from "./Particles";
@@ -35,6 +36,39 @@ export const timeline: TimelineSegment[] = [
   { name: "Branding", from: 180, durationInFrames: 60, color: "#22c55e" },
 ];
 
+// ─── CAMERA ANIMATION ────────────────────────────────
+const CameraRig: React.FC<{ frame: number; fps: number }> = ({ frame, fps }) => {
+  useCamera({
+    frame,
+    fps,
+    keyframes: [
+      // Ambient: uzaktan, hafif yukarıdan
+      { frame: 0, position: [0, 1.5, 9], lookAt: [0, 0, 0], fov: 50 },
+      // Assembly başlangıcı: yavaşça yaklaş
+      { frame: 20, position: [0, 1, 8], lookAt: [0, 0, 0], fov: 48 },
+      // Assembly ortası: biraz sola kay, yaklaş
+      { frame: 80, position: [-1.5, 0.5, 5.5], lookAt: [0, 0.3, 0], fov: 45 },
+      // Assembly sonu: merkeze dön, yakın
+      { frame: 135, position: [0, 0.5, 5], lookAt: [0, 0.2, 0], fov: 42 },
+      // Activation: hafif geri çekil (bloom patlaması için alan aç)
+      { frame: 155, position: [0, 0.3, 5.8], lookAt: [0, 0.3, 0], fov: 44 },
+      // Branding: yukarı çekil, geniş açı
+      { frame: 190, position: [0, 0.8, 6], lookAt: [0, 0.2, 0], fov: 45 },
+      // Son frame: aynı pozisyonda kal
+      { frame: 240, position: [0, 0.8, 6], lookAt: [0, 0.2, 0], fov: 45 },
+    ],
+    interpolation: "catmullrom",
+    // Activation anında hafif sarsıntı
+    shake: {
+      intensity: 0.08,
+      frequency: 20,
+      frames: [140, 160],
+      decay: 0.8,
+    },
+  });
+  return null;
+};
+
 // ─── SCENE (r3f tree) ────────────────────────────────
 const Scene: React.FC<{ frame: number; fps: number }> = ({ frame, fps }) => {
   // Bloom ramps up at activation, then settles
@@ -47,6 +81,8 @@ const Scene: React.FC<{ frame: number; fps: number }> = ({ frame, fps }) => {
 
   return (
     <>
+      <CameraRig frame={frame} fps={fps} />
+
       <ambientLight intensity={0.15} />
       <pointLight position={[5, 5, 5]} intensity={1.5} color="#a78bfa" />
       <pointLight position={[-4, -2, 3]} intensity={0.6} color="#3b82f6" />

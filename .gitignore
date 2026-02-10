@@ -4,3 +4,4 @@ dist/
 *.log
 output*.mp4
 /tmp/
+.claude/
