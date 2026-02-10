@@ -3,7 +3,8 @@ import { renderVideo, type RenderOptions, type ProgressInfo, type RenderResult }
 
 // Job types
 interface Job {
-  status: "pending" | "rendering" | "completed" | "failed";
+  status: "pending" | "queued" | "rendering" | "completed" | "failed" | "cancelled";
+  templateId: string;
   progress: ProgressInfo | null;
   result: RenderResult | null;
   error: string | null;
@@ -24,7 +25,14 @@ type WSServerMessage =
   | { type: "subscribed"; jobId: string }
   | { type: "progress"; jobId: string } & ProgressInfo
   | { type: "complete"; jobId: string; result: RenderResult }
-  | { type: "error"; jobId: string; error: string };
+  | { type: "error"; jobId: string; error: string }
+  | { type: "queued"; jobId: string; position: number }
+  | { type: "cancelled"; jobId: string };
+
+// ─── Render Queue ────────────────────────────────────
+const MAX_CONCURRENT_JOBS = 1;
+let activeJobCount = 0;
+const queue: string[] = []; // jobId FIFO queue
 
 // Job storage
 const jobs = new Map<string, Job>();
@@ -99,7 +107,7 @@ function unsubscribeClient(ws: ServerWebSocket<WebSocketData>, jobId: string): v
 // CORS headers for localhost dev
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
@@ -125,10 +133,41 @@ async function serveStaticFile(path: string): Promise<Response> {
   return new Response("Not Found", { status: 404, headers: corsHeaders });
 }
 
+// Enqueue a job and process if slot available
+function enqueueJob(jobId: string): void {
+  const job = jobs.get(jobId);
+  if (!job) return;
+
+  job.status = "queued";
+  queue.push(jobId);
+
+  const position = queue.indexOf(jobId);
+  broadcastToJob(jobId, { type: "queued", jobId, position });
+
+  processQueue();
+}
+
+// Process next job in queue if a slot is free
+function processQueue(): void {
+  while (activeJobCount < MAX_CONCURRENT_JOBS && queue.length > 0) {
+    const nextId = queue.shift();
+    if (!nextId) break;
+
+    const job = jobs.get(nextId);
+    if (!job || job.status === "cancelled") continue;
+
+    activeJobCount++;
+    startRenderJob(nextId, job.templateId).finally(() => {
+      activeJobCount--;
+      processQueue();
+    });
+  }
+}
+
 // Start render job
 async function startRenderJob(jobId: string, templateId: string): Promise<void> {
   const job = jobs.get(jobId);
-  if (!job) return;
+  if (!job || job.status === "cancelled") return;
 
   job.status = "rendering";
 
@@ -138,7 +177,6 @@ async function startRenderJob(jobId: string, templateId: string): Promise<void> 
       const currentJob = jobs.get(jobId);
       if (currentJob) {
         currentJob.progress = info;
-        // Broadcast progress to WebSocket subscribers
         broadcastToJob(jobId, { type: "progress", jobId, ...info });
       }
     },
@@ -150,7 +188,6 @@ async function startRenderJob(jobId: string, templateId: string): Promise<void> 
     if (currentJob) {
       currentJob.status = result.success ? "completed" : "failed";
       currentJob.result = result;
-      // Broadcast completion to WebSocket subscribers
       if (result.success) {
         broadcastToJob(jobId, { type: "complete", jobId, result });
       } else {
@@ -162,7 +199,6 @@ async function startRenderJob(jobId: string, templateId: string): Promise<void> 
     if (currentJob) {
       currentJob.status = "failed";
       currentJob.error = error instanceof Error ? error.message : "Unknown error";
-      // Broadcast error to WebSocket subscribers
       broadcastToJob(jobId, { type: "error", jobId, error: currentJob.error });
     }
   }
@@ -192,7 +228,7 @@ const server = Bun.serve<WebSocketData>({
       return new Response("WebSocket upgrade failed", { status: 400, headers: corsHeaders });
     }
 
-    // POST /api/render - Start a render job
+    // POST /api/render - Enqueue a single render job
     if (req.method === "POST" && pathname === "/api/render") {
       try {
         const body = await req.json() as { templateId?: string };
@@ -207,28 +243,100 @@ const server = Bun.serve<WebSocketData>({
 
         const jobId = generateId();
 
-        // Create job entry
         jobs.set(jobId, {
           status: "pending",
+          templateId,
           progress: null,
           result: null,
           error: null,
           createdAt: Date.now(),
         });
 
-        // Start render in background (don't await)
-        startRenderJob(jobId, templateId);
+        enqueueJob(jobId);
 
         return Response.json(
-          { jobId, status: "pending" },
+          { jobId, status: "queued", position: queue.indexOf(jobId) },
           { status: 202, headers: corsHeaders }
         );
-      } catch (error) {
+      } catch {
         return Response.json(
           { error: "Invalid request body" },
           { status: 400, headers: corsHeaders }
         );
       }
+    }
+
+    // POST /api/render/batch - Enqueue multiple render jobs
+    if (req.method === "POST" && pathname === "/api/render/batch") {
+      try {
+        const body = await req.json() as { templateIds?: string[] };
+        const { templateIds } = body;
+
+        if (!templateIds || !Array.isArray(templateIds) || templateIds.length === 0) {
+          return Response.json(
+            { error: "templateIds array is required" },
+            { status: 400, headers: corsHeaders }
+          );
+        }
+
+        const jobIds: { jobId: string; templateId: string; position: number }[] = [];
+
+        for (const templateId of templateIds) {
+          const jobId = generateId();
+          jobs.set(jobId, {
+            status: "pending",
+            templateId,
+            progress: null,
+            result: null,
+            error: null,
+            createdAt: Date.now(),
+          });
+          enqueueJob(jobId);
+          jobIds.push({ jobId, templateId, position: queue.indexOf(jobId) });
+        }
+
+        return Response.json(
+          { jobs: jobIds, total: jobIds.length },
+          { status: 202, headers: corsHeaders }
+        );
+      } catch {
+        return Response.json(
+          { error: "Invalid request body" },
+          { status: 400, headers: corsHeaders }
+        );
+      }
+    }
+
+    // GET /api/queue - Queue status
+    if (req.method === "GET" && pathname === "/api/queue") {
+      const pending = queue.map((jobId, position) => {
+        const job = jobs.get(jobId);
+        return {
+          jobId,
+          templateId: job?.templateId,
+          status: job?.status,
+          position,
+        };
+      });
+
+      const active = [...jobs.entries()]
+        .filter(([, job]) => job.status === "rendering")
+        .map(([jobId, job]) => ({
+          jobId,
+          templateId: job.templateId,
+          progress: job.progress,
+        }));
+
+      return Response.json(
+        {
+          active,
+          activeCount: activeJobCount,
+          maxConcurrent: MAX_CONCURRENT_JOBS,
+          queued: pending,
+          queueLength: queue.length,
+        },
+        { headers: corsHeaders }
+      );
     }
 
     // GET /api/jobs/:id - Get job status
@@ -246,11 +354,53 @@ const server = Bun.serve<WebSocketData>({
       return Response.json(
         {
           jobId,
+          templateId: job.templateId,
           status: job.status,
           progress: job.progress,
           result: job.result,
           error: job.error,
         },
+        { headers: corsHeaders }
+      );
+    }
+
+    // DELETE /api/jobs/:id - Cancel a queued job
+    if (req.method === "DELETE" && pathname.startsWith("/api/jobs/")) {
+      const jobId = pathname.replace("/api/jobs/", "");
+      const job = jobs.get(jobId);
+
+      if (!job) {
+        return Response.json(
+          { error: "Job not found" },
+          { status: 404, headers: corsHeaders }
+        );
+      }
+
+      if (job.status === "rendering") {
+        return Response.json(
+          { error: "Cannot cancel a job that is currently rendering" },
+          { status: 409, headers: corsHeaders }
+        );
+      }
+
+      if (job.status === "completed" || job.status === "failed") {
+        return Response.json(
+          { error: "Job already finished" },
+          { status: 409, headers: corsHeaders }
+        );
+      }
+
+      // Remove from queue
+      const queueIdx = queue.indexOf(jobId);
+      if (queueIdx !== -1) {
+        queue.splice(queueIdx, 1);
+      }
+
+      job.status = "cancelled";
+      broadcastToJob(jobId, { type: "cancelled", jobId });
+
+      return Response.json(
+        { jobId, status: "cancelled" },
         { headers: corsHeaders }
       );
     }

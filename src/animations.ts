@@ -94,20 +94,47 @@ export interface VideoConfig {
 }
 
 /**
+ * Preset config extends VideoConfig with display metadata
+ */
+export interface PresetConfig extends VideoConfig {
+  label: string;
+  aspectRatio: string;
+}
+
+/**
  * Presets
  */
-export const presets = {
+export const presets: Record<string, PresetConfig> = {
   // Instagram
-  instagramStory: { width: 1080, height: 1920, fps: 30, durationInFrames: 150 },
-  instagramPost: { width: 1080, height: 1080, fps: 30, durationInFrames: 150 },
-  instagramReel: { width: 1080, height: 1920, fps: 30, durationInFrames: 450 },
+  instagramStory: { width: 1080, height: 1920, fps: 30, durationInFrames: 150, label: "Instagram Story", aspectRatio: "9:16" },
+  instagramPost: { width: 1080, height: 1080, fps: 30, durationInFrames: 150, label: "Instagram Post", aspectRatio: "1:1" },
+  instagramReel: { width: 1080, height: 1920, fps: 30, durationInFrames: 450, label: "Instagram Reel", aspectRatio: "9:16" },
 
   // YouTube
-  youtube: { width: 1920, height: 1080, fps: 30, durationInFrames: 150 },
-  youtubeShort: { width: 1080, height: 1920, fps: 30, durationInFrames: 450 },
+  youtube: { width: 1920, height: 1080, fps: 30, durationInFrames: 150, label: "YouTube", aspectRatio: "16:9" },
+  youtubeShort: { width: 1080, height: 1920, fps: 30, durationInFrames: 450, label: "YouTube Short", aspectRatio: "9:16" },
 
   // TikTok
-  tiktok: { width: 1080, height: 1920, fps: 30, durationInFrames: 450 },
+  tiktok: { width: 1080, height: 1920, fps: 30, durationInFrames: 450, label: "TikTok", aspectRatio: "9:16" },
+
+  // Twitter/X
+  twitterPost: { width: 1200, height: 675, fps: 30, durationInFrames: 150, label: "Twitter/X Post", aspectRatio: "16:9" },
+
+  // LinkedIn
+  linkedinPost: { width: 1200, height: 628, fps: 30, durationInFrames: 150, label: "LinkedIn Post", aspectRatio: "1.91:1" },
+
+  // Facebook
+  facebookCover: { width: 820, height: 312, fps: 30, durationInFrames: 150, label: "Facebook Cover", aspectRatio: "2.63:1" },
+
+  // Discord
+  discord: { width: 1280, height: 720, fps: 30, durationInFrames: 150, label: "Discord", aspectRatio: "16:9" },
+
+  // Cinema
+  cinema4K: { width: 3840, height: 2160, fps: 24, durationInFrames: 120, label: "Cinema 4K", aspectRatio: "16:9" },
+  cinema2K: { width: 2560, height: 1440, fps: 24, durationInFrames: 120, label: "Cinema 2K", aspectRatio: "16:9" },
+
+  // Square
+  square4K: { width: 2160, height: 2160, fps: 30, durationInFrames: 150, label: "Square 4K", aspectRatio: "1:1" },
 };
 
 export const defaultConfig: VideoConfig = presets.instagramStory;

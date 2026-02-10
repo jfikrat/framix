@@ -19,6 +19,7 @@ export interface RenderResult {
   success: boolean;
   outputPath: string;
   duration: number;
+  error?: string;
 }
 
 export interface RenderOptions {
