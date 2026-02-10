@@ -23,13 +23,14 @@ src/
 ├── animations.ts        # interpolate, spring, easing, VideoConfig, presets
 ├── Sequence.tsx          # FrameProvider, useCurrentFrame, useVideoConfig, Sequence
 ├── gsap.ts              # useTimeline, useStagger (paused GSAP, seek ile sync)
+├── three.tsx            # FramixCanvas wrapper (r3f + drei + postprocessing)
 ├── Player.tsx           # Preview player (FrameProvider ile sarar)
-├── Gallery.tsx          # Template galeri UI (Vite glob ile auto-discovery)
+├── Gallery.tsx          # Project galeri UI (Vite glob ile auto-discovery, brand gruplama)
 ├── audio/               # Ses motoru (stereo, reverb, compressor)
 ├── templates/
-│   ├── types.ts         # TemplateMeta interface
+│   ├── types.ts         # ProjectMeta, TimelineSegment interfaces
 │   ├── index.ts         # Export registry (eski, Gallery artik glob kullaniyor)
-│   └── *.tsx            # Her template: meta + component + templateConfig
+│   └── *.tsx            # Her proje: meta + component + templateConfig + timeline?
 └── components/          # Ortak UI bilesenler
 
 brands/                   # Marka/musteri bilgi bankasi
@@ -56,14 +57,16 @@ Yeni marka eklemek icin:
 
 Template yazarken marka bilgilerine `brands/MARKA/README.md` ve `palette.json`'dan bak.
 
-## Template Sistemi
+## Project Sistemi
 
-Her template dosyasi su export'lari icermeli:
-- `meta: TemplateMeta` — id, name, category, color (ZORUNLU)
+Her proje dosyasi su export'lari icermeli:
+- `meta: ProjectMeta` — id, name, brand?, category, color (ZORUNLU)
 - Named component: `React.FC<AnimationProps>` — frame ve config alir
 - `templateConfig?: Partial<VideoConfig>` — custom resolution/fps/duration
+- `timeline?: TimelineSegment[]` — sequencer bar icin segment bilgisi (opsiyonel)
 
 Gallery `import.meta.glob("./templates/*.tsx")` ile otomatik kesfeder. index.ts'ye eklemeye gerek yok.
+Projeler sidebar'da `brand` field'ina gore gruplanir (cobrain, genel vb.).
 
 ## Animasyon Primitifleri
 
@@ -91,17 +94,21 @@ Gallery `import.meta.glob("./templates/*.tsx")` ile otomatik kesfeder. index.ts'
 
 - Build check: `bun run build` (vite build)
 - Lint yoksa build yeterli
-- Template isimleri PascalCase: `AITimelineV2`, `CobrainPromo`
-- Template ID'ler kebab-case: `ai-timeline-v2`, `cobrain-promo`
+- Proje isimleri PascalCase: `AITimelineV2`, `CobrainPromo`
+- Proje ID'ler kebab-case: `ai-timeline-v2`, `cobrain-promo`
 - Renk degerleri hex: `#8b5cf6`, `#e53e3e`
 
 ## Coding Rules
 
-- Yeni template icin mevcut bir template'i referans al (AITimelineV2 en guncel)
+- Yeni proje icin mevcut bir projeyi referans al (AITimelineV2 en guncel)
 - interpolate + spring basit animasyonlar icin yeterli, GSAP sadece karmasik timeline gerektiginde
 - SVG logolar icin simple-icons paketinden path data cek
 - Public asset'ler `public/` klasorunde
 - FrameProvider Player'da HEM fullscreen HEM normal modda olmali
+- 3D animasyonlar icin r3f (React Three Fiber) + drei + postprocessing kullan
+- r3f Canvas icinde useCurrentFrame() CALISMAZ — frame/config'i prop olarak gec
+- Canvas: preserveDrawingBuffer: true (Puppeteer render icin zorunlu)
+- FramixCanvas wrapper'ini kullan (src/three.tsx)
 
 ---
 
@@ -127,7 +134,7 @@ Gallery `import.meta.glob("./templates/*.tsx")` ile otomatik kesfeder. index.ts'
 - Kirmizi: `#e53e3e`, `#FF0050` (TikTok, aksiyon)
 - Altin: `#D4AF37` (premium, Goldman)
 - Yesil: `#22c55e`, `#00C851` (aksiyon butonlari)
-- Mor: `#8b5cf6` (template accent, branding)
+- Mor: `#8b5cf6` (project accent, branding)
 - Turuncu: `#FF6B00` (enerji, Grok)
 
 ### Yapisal Tercihler

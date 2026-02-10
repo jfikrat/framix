@@ -5,6 +5,7 @@ import type { TemplateMeta } from "./types";
 export const meta: TemplateMeta = {
   id: "ai-timeline",
   name: "AI Timeline Tweet",
+  brand: "cobrain",
   category: "promo",
   color: "#3b82f6",
 };

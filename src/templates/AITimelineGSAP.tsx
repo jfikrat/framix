@@ -6,6 +6,7 @@ import type { TemplateMeta } from "./types";
 export const meta: TemplateMeta = {
   id: "ai-timeline-gsap",
   name: "AI Timeline (GSAP)",
+  brand: "cobrain",
   category: "promo",
   color: "#8b5cf6",
 };

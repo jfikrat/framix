@@ -1,11 +1,12 @@
 import React from "react";
 import { interpolate, spring, easing, type AnimationProps, type VideoConfig } from "../animations";
-import type { TemplateMeta } from "./types";
+import type { TemplateMeta, TimelineSegment } from "./types";
 import type { AudioTrack } from "../audio/types";
 
 export const meta: TemplateMeta = {
   id: "cobrain-promo",
   name: "Cobrain Promo",
+  brand: "cobrain",
   category: "promo",
   color: "#3b82f6",
 };
@@ -13,6 +14,13 @@ export const meta: TemplateMeta = {
 export const templateConfig: Partial<VideoConfig> = {
   durationInFrames: 450,
 };
+
+export const timeline: TimelineSegment[] = [
+  { name: "Hook", from: 0, durationInFrames: 90, color: "#8b5cf6" },
+  { name: "Features", from: 90, durationInFrames: 160, color: "#3b82f6" },
+  { name: "USP", from: 250, durationInFrames: 110, color: "#22c55e" },
+  { name: "CTA", from: 360, durationInFrames: 90, color: "#e53e3e" },
+];
 
 // ─── CONSTANTS ──────────────────────────────────────────
 const FPS = 30;

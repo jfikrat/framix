@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import type { VideoConfig } from "./animations";
 import type { AudioTrack } from "./audio/types";
+import type { TimelineSegment } from "./templates/types";
 import { AudioPreview } from "./audio/preview";
 import { FrameProvider } from "./Sequence";
 
@@ -8,14 +9,93 @@ interface PlayerProps {
   children: (frame: number) => React.ReactNode;
   config: VideoConfig;
   audioTrack?: AudioTrack;
+  timeline?: TimelineSegment[];
   isFullscreen?: boolean;
   onFullscreenChange?: (fs: boolean) => void;
 }
 
+// ─── Sequencer Bar ──────────────────────────────────
+const SequencerBar: React.FC<{
+  timeline: TimelineSegment[];
+  totalFrames: number;
+  currentFrame: number;
+  onSeek: (frame: number) => void;
+  width: number;
+}> = ({ timeline, totalFrames, currentFrame, onSeek, width }) => {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+
+  return (
+    <div
+      style={{
+        width,
+        display: "flex",
+        height: 28,
+        borderRadius: 6,
+        overflow: "hidden",
+        background: "#0a0a0a",
+        border: "1px solid #222",
+        marginTop: 12,
+        cursor: "pointer",
+      }}
+    >
+      {timeline.map((seg, i) => {
+        const widthPct = (seg.durationInFrames / totalFrames) * 100;
+        const segEnd = seg.from + seg.durationInFrames;
+        const isActive = currentFrame >= seg.from && currentFrame < segEnd;
+        const isHovered = hoveredIdx === i;
+
+        return (
+          <div
+            key={i}
+            onClick={() => onSeek(seg.from)}
+            onMouseEnter={() => setHoveredIdx(i)}
+            onMouseLeave={() => setHoveredIdx(null)}
+            style={{
+              width: `${widthPct}%`,
+              height: "100%",
+              background: seg.color,
+              opacity: isActive ? 1 : isHovered ? 0.8 : 0.5,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              position: "relative",
+              transition: "opacity 0.15s",
+              borderRight: i < timeline.length - 1 ? "1px solid #0a0a0a" : "none",
+              boxShadow: isActive ? `inset 0 0 12px rgba(255,255,255,0.15)` : "none",
+            }}
+            title={`${seg.name} (${seg.from}–${segEnd})`}
+          >
+            {widthPct > 8 && (
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: 600,
+                  color: "rgba(255,255,255,0.9)",
+                  textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+                  letterSpacing: 0.3,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  padding: "0 4px",
+                  maxWidth: "100%",
+                }}
+              >
+                {seg.name}
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ─── Player ─────────────────────────────────────────
 export const Player: React.FC<PlayerProps> = ({
   children,
   config,
   audioTrack,
+  timeline,
   isFullscreen = false,
   onFullscreenChange,
 }) => {
@@ -131,6 +211,13 @@ export const Player: React.FC<PlayerProps> = ({
     audioRef.current?.seekToFrame(newFrame);
   };
 
+  const handleSeek = (targetFrame: number) => {
+    setFrame(targetFrame);
+    setIsPlaying(false);
+    audioRef.current?.pause();
+    audioRef.current?.seekToFrame(targetFrame);
+  };
+
   const handleReset = () => {
     setFrame(0);
     setIsPlaying(false);
@@ -140,18 +227,30 @@ export const Player: React.FC<PlayerProps> = ({
   const currentTime = (frame / fps).toFixed(2);
   const totalTime = (durationInFrames / fps).toFixed(2);
 
+  const controlsWidth = isFullscreen ? Math.min(width * scale, viewportSize.w * 0.9) : width * scale;
+
+  const sequencerBar = timeline && timeline.length > 0 ? (
+    <SequencerBar
+      timeline={timeline}
+      totalFrames={durationInFrames}
+      currentFrame={frame}
+      onSeek={handleSeek}
+      width={controlsWidth}
+    />
+  ) : null;
+
   const controlsContent = (
     <div
       style={{
-        width: isFullscreen ? Math.min(width * scale, viewportSize.w * 0.9) : width * scale,
-        marginTop: isFullscreen ? 0 : 16,
+        width: controlsWidth,
+        marginTop: isFullscreen ? 0 : sequencerBar ? 0 : 16,
         padding: isFullscreen ? "12px 20px" : 16,
         background: isFullscreen ? "rgba(15,15,15,0.85)" : "#151515",
         borderRadius: isFullscreen ? 16 : 12,
         backdropFilter: isFullscreen ? "blur(12px)" : undefined,
       }}
     >
-      {/* Timeline */}
+      {/* Timeline slider */}
       <input
         type="range"
         min={0}
@@ -198,7 +297,7 @@ export const Player: React.FC<PlayerProps> = ({
             transition: "background 0.15s",
           }}
         >
-          {isPlaying ? "⏸ Pause" : "▶ Play"}
+          {isPlaying ? "Pause" : "Play"}
         </button>
 
         <button
@@ -213,7 +312,7 @@ export const Player: React.FC<PlayerProps> = ({
             cursor: "pointer",
           }}
         >
-          ⏮
+          Reset
         </button>
 
         {audioTrack && (
@@ -230,7 +329,7 @@ export const Player: React.FC<PlayerProps> = ({
             }}
             title={isMuted ? "Unmute" : "Mute"}
           >
-            {isMuted ? "🔇" : "🔊"}
+            {isMuted ? "Muted" : "Sound"}
           </button>
         )}
 
@@ -248,7 +347,7 @@ export const Player: React.FC<PlayerProps> = ({
           }}
           title={isFullscreen ? "Exit Fullscreen (ESC)" : "Fullscreen"}
         >
-          {isFullscreen ? "⤓" : "⤢"}
+          {isFullscreen ? "Exit" : "Full"}
         </button>
 
         {/* Stats */}
@@ -303,7 +402,8 @@ export const Player: React.FC<PlayerProps> = ({
         </div>
 
         {/* Controls overlay at bottom */}
-        <div style={{ position: "absolute", bottom: 24, left: 0, right: 0, display: "flex", justifyContent: "center" }}>
+        <div style={{ position: "absolute", bottom: 24, left: 0, right: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
+          {sequencerBar}
           {controlsContent}
         </div>
       </div>
@@ -338,8 +438,13 @@ export const Player: React.FC<PlayerProps> = ({
         </div>
       </div>
 
+      {/* Sequencer bar */}
+      {sequencerBar}
+
       {/* Controls */}
-      {controlsContent}
+      <div style={{ marginTop: sequencerBar ? 0 : undefined }}>
+        {controlsContent}
+      </div>
     </div>
   );
 };

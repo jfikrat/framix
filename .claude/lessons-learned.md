@@ -1,6 +1,6 @@
 # Lessons Learned
 
-Son guncelleme: 2026-02-09
+Son guncelleme: 2026-02-10
 
 ## 1. Remotion vs Framix (2026-02-09)
 
@@ -21,7 +21,7 @@ Son guncelleme: 2026-02-09
 ### Onemli Karar
 - Remotion yerine framix'te kalmaya karar verildi ("kendi evimizde kalalim")
 - Remotion'un en iyi fikirleri port edildi, bagimlilik eklenmedi
-- r3f framix'te calisir (CSS scale sorunu yok) — gelecekte denenebilir
+- r3f framix'te calisir — CSS scale sorunu VARDI ama cozuldu (bkz. Lesson 6)
 
 ## 2. Logo / Ikon Stratejisi (2026-02-09)
 
@@ -64,17 +64,42 @@ Son guncelleme: 2026-02-09
 - Unutulursa: Sequence/useCurrentFrame "must be used within FrameProvider" hatasi verir
 - Normal modda eksik olduğu tespit edildi ve duzeltildi
 
-## 5. Acik Kapilar / Yapilacaklar
+## 5. r3f CSS Scale Sorunu ve Cozumu (2026-02-10)
+
+### Sorun
+Player.tsx template'i tam video boyutunda render edip (ornegin 1920x1080) CSS `transform: scale()` ile preview alanina sigdirir. DOM elementleri bununla sorunsuz calisir. Ancak r3f Canvas'in boyut olcum kutuphanesi (`react-use-measure`) `getBoundingClientRect()` kullanir — bu fonksiyon ancestor CSS transform'larini hesaba katar ve scale'lenmis kucuk boyutu dondurur. Three.js bu boyutu alip hem WebGL buffer'i hem canvas.style boyutunu kucuk set eder. Sonuc: 3D icerik sol ust kosede kucuk render olur.
+
+### Kok Neden
+```
+Player: div 1920x1080 → transform: scale(0.31) → gorsel ~600x337
+r3f: getBoundingClientRect() → 600x337 rapor eder (transform dahil)
+Three.js: gl.setSize(600, 337) + canvas.style = 600x337
+Sonuc: 1920x1080 kutuda 600x337 canvas → sol ust kose
+```
+
+### Cozum (FramixCanvas - src/three.tsx)
+1. **`resize={{ offsetSize: true }}`** — react-use-measure'a `getBoundingClientRect()` yerine `element.offsetWidth/Height` kullanmasini soyler. offsetWidth/Height ancestor CSS transform'lardan etkilenMEZ → dogru 1920x1080 doner
+2. **SizeEnforcer component** — guvenlik agi. Her frame'de canvas buffer boyutunu kontrol eder. Yanlissa `gl.setSize(w, h, false)` ile duzeltir (false = CSS style'a dokunma) + kamera aspect ratio'sunu gunceller
+
+### Onemli Notlar
+- `dpr={1}` kullan — CSS scale altinda dpr:2 gereksiz buyuk buffer olusturur
+- `preserveDrawingBuffer: true` — Puppeteer screenshot'larinda WebGL iceriginin gorunmesi icin SART
+- `useCurrentFrame()` Canvas icinde CALISMAZ (r3f ayri React reconciler olusturur, FrameContext gecmez). frame/config'i prop olarak gec
+- Remotion'da AYNI sorun var ve cozumu YOK (preview modunda r3f calismaz). Framix'te cozuldu
+
+## 6. Acik Kapilar / Yapilacaklar
 
 ### Visual Timeline Editor
 - Remotion Studio gibi Sequence'lerin gorsel temsili (hangi Sequence ne zaman aktif)
 - Gallery UI'a timeline bar eklenmeli
 - Renk kodlu bloklarla gorsellestirilmeli
 
-### 3D Pipeline (r3f)
-- Framix'te r3f calisir (Remotion'daki CSS scale sorunu yok)
-- Kart flip, depth-of-field, bloom, particle glow mumkun
-- `@react-three/fiber` + `@react-three/postprocessing` denenebilir
+### 3D Pipeline (r3f) ✅ TAMAMLANDI
+- r3f + drei + postprocessing entegre edildi (2026-02-10)
+- FramixCanvas wrapper: `src/three.tsx`
+- Demo template: `src/templates/ThreeDemo.tsx` (TorusKnot, bloom, particles)
+- CSS scale sorunu cozuldu (bkz. Lesson 5)
+- Sonraki adimlar: kart flip, depth-of-field, particle text
 
 ### Ortak Asset Sistemi
 - Template'ler arasi paylasilan logolar, fontlar

@@ -3,11 +3,12 @@ import type { AnimationProps, VideoConfig } from "../animations";
 import { interpolate, spring, easing } from "../animations";
 import { Sequence, useCurrentFrame, useVideoConfig } from "../Sequence";
 import { useTimeline } from "../gsap";
-import type { TemplateMeta } from "./types";
+import type { ProjectMeta, TimelineSegment } from "./types";
 
-export const meta: TemplateMeta = {
+export const meta: ProjectMeta = {
   id: "ai-timeline-v2",
   name: "AI Timeline V2",
+  brand: "cobrain",
   category: "promo",
   color: "#8b5cf6",
 };
@@ -62,6 +63,17 @@ export const templateConfig: Partial<VideoConfig> = {
   height: 1080,
   durationInFrames: TOTAL_FRAMES,
 };
+
+export const timeline: TimelineSegment[] = [
+  { name: "Intro", from: 0, durationInFrames: INTRO_DURATION, color: "#3b82f6" },
+  ...CARDS.map((card, i) => ({
+    name: card.title,
+    from: CARDS_START + i * CARD_DURATION,
+    durationInFrames: CARD_DURATION,
+    color: card.accent,
+  })),
+  { name: "Closing", from: CARDS_END, durationInFrames: CLOSING_DURATION, color: "#8b5cf6" },
+];
 
 // ─── PARTICLES (deterministic) ───────────────────────
 const PARTICLE_COUNT = 50;
