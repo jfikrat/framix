@@ -1,4 +1,5 @@
 import type { AnimationProps } from "../animations";
+import type { InputSchema } from "../inputs";
 
 export interface TimelineSegment {
   name: string;
@@ -13,6 +14,7 @@ export interface ProjectMeta {
   brand?: string;
   category: "intro" | "promo" | "dynamic" | "quote" | "celebration" | "minimal";
   color: string;
+  inputs?: InputSchema;
 }
 
 /** @deprecated Use ProjectMeta instead */

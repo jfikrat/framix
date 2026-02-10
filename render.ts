@@ -1,8 +1,8 @@
-import puppeteer, { Browser, Page } from "puppeteer";
+import puppeteer from "puppeteer";
 import { execSync } from "child_process";
 import { mkdirSync, rmSync, existsSync } from "fs";
 import { cpus } from "os";
-import { defaultConfig } from "./src/animations";
+import { defaultConfig, type VideoConfig } from "./src/animations";
 
 // ============================================================
 // Types & Interfaces
@@ -25,6 +25,9 @@ export interface RenderResult {
 export interface RenderOptions {
   templateId?: string;
   outputPath?: string;
+  devServerUrl?: string;
+  config?: Partial<VideoConfig>;
+  audioPath?: string;
   onProgress?: (info: ProgressInfo) => void;
 }
 
@@ -32,90 +35,57 @@ export interface RenderOptions {
 // Constants
 // ============================================================
 
-const config = defaultConfig;
+const DEFAULT_DEV_SERVER = "http://localhost:4200";
 const DEFAULT_FRAMES_DIR = "/tmp/framix-frames";
-const DEFAULT_OUTPUT_FILE = "./output.mp4";
-const WORKER_COUNT = Math.min(cpus().length, 8); // Max 8 worker
+const DEFAULT_OUTPUT_DIR = "./output";
+const WORKER_COUNT = Math.min(cpus().length, 8);
 
-// HTML template
-const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { width: ${config.width}px; height: ${config.height}px; overflow: hidden; }
-  </style>
-</head>
-<body>
-  <div id="root"></div>
-  <script>
-    function interpolate(value, inputRange, outputRange, options) {
-      const [inputMin, inputMax] = inputRange;
-      const [outputMin, outputMax] = outputRange;
-      let progress = (value - inputMin) / (inputMax - inputMin);
-      if (options && options.clamp) progress = Math.max(0, Math.min(1, progress));
-      return outputMin + progress * (outputMax - outputMin);
-    }
+// ============================================================
+// Template Config Fetcher
+// ============================================================
 
-    function spring(opts) {
-      var frame = opts.frame, fps = opts.fps;
-      var damping = opts.damping || 10, stiffness = opts.stiffness || 100, mass = opts.mass || 1;
-      if (frame < 0) return 0;
-      var time = frame / fps;
-      var omega = Math.sqrt(stiffness / mass);
-      var zeta = damping / (2 * Math.sqrt(stiffness * mass));
-      var value;
-      if (zeta < 1) {
-        var omegaD = omega * Math.sqrt(1 - zeta * zeta);
-        value = 1 - Math.exp(-zeta * omega * time) *
-          (Math.cos(omegaD * time) + (zeta * omega / omegaD) * Math.sin(omegaD * time));
-      } else if (zeta === 1) {
-        value = 1 - Math.exp(-omega * time) * (1 + omega * time);
-      } else {
-        var s1 = -omega * (zeta + Math.sqrt(zeta * zeta - 1));
-        var s2 = -omega * (zeta - Math.sqrt(zeta * zeta - 1));
-        value = 1 + (s2 * Math.exp(s1 * time) - s1 * Math.exp(s2 * time)) / (s1 - s2);
-      }
-      return Math.max(0, Math.min(1, value));
-    }
+async function fetchTemplateConfig(
+  devServerUrl: string,
+  templateId: string,
+): Promise<VideoConfig> {
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+  });
 
-    var config = ${JSON.stringify(config)};
-    var fps = config.fps, width = config.width, height = config.height, durationInFrames = config.durationInFrames;
+  try {
+    const page = await browser.newPage();
+    await page.goto(`${devServerUrl}?render=${templateId}`, {
+      waitUntil: "networkidle0",
+      timeout: 30000,
+    });
 
-    function renderFrame(frame) {
-      var logoScale = spring({ frame: frame, fps: fps, damping: 12, stiffness: 100 });
-      var logoRotation = interpolate(frame, [0, 30], [0, 360], { clamp: true });
-      var titleProgress = spring({ frame: frame - 25, fps: fps, damping: 15 });
-      var titleY = interpolate(titleProgress, [0, 1], [50, 0]);
-      var titleOpacity = interpolate(titleProgress, [0, 1], [0, 1]);
-      var subtitleOpacity = interpolate(frame, [50, 70], [0, 1], { clamp: true });
-      var fadeOut = interpolate(frame, [durationInFrames - 30, durationInFrames], [1, 0], { clamp: true });
+    // Wait for RenderView to signal ready
+    await page.waitForFunction(
+      () => (window as any).__renderReady === true,
+      { timeout: 15000 },
+    );
 
-      document.getElementById("root").innerHTML =
-        '<div style="width: ' + width + 'px; height: ' + height + 'px; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: system-ui; opacity: ' + fadeOut + '; overflow: hidden; position: relative;">' +
-          '<div style="position: absolute; width: 400px; height: 400px; border-radius: 50%; background: radial-gradient(circle, rgba(229,62,62,0.3) 0%, transparent 70%); transform: scale(' + (logoScale * 1.5) + '); filter: blur(40px);"></div>' +
-          '<div style="width: 120px; height: 120px; background: linear-gradient(135deg, #e53e3e 0%, #f6ad55 100%); border-radius: 24px; display: flex; align-items: center; justify-content: center; transform: scale(' + logoScale + ') rotate(' + logoRotation + 'deg); box-shadow: 0 20px 60px rgba(229,62,62,0.4); margin-bottom: 40px;">' +
-            '<span style="font-size: 48px; color: white;">▶</span>' +
-          '</div>' +
-          '<h1 style="font-size: 72px; font-weight: 800; color: white; margin: 0; opacity: ' + titleOpacity + '; transform: translateY(' + titleY + 'px); text-shadow: 0 4px 20px rgba(0,0,0,0.3);">Framix</h1>' +
-          '<p style="font-size: 28px; color: rgba(255,255,255,0.7); margin: 0; margin-top: 16px; opacity: ' + subtitleOpacity + '; letter-spacing: 2px;">Paralel Video Render</p>' +
-          '<div style="position: absolute; bottom: 20px; right: 20px; color: rgba(255,255,255,0.3); font-size: 14px; font-family: monospace;">Frame: ' + frame + ' / ' + durationInFrames + '</div>' +
-        '</div>';
-    }
+    // Read template config from window
+    const config = await page.evaluate(() => (window as any).__config);
+    return config as VideoConfig;
+  } finally {
+    await browser.close();
+  }
+}
 
-    window.renderFrame = renderFrame;
-    window.renderFrame(0);
-  </script>
-</body>
-</html>`;
+// ============================================================
+// Worker: Renders a subset of frames via dev server
+// ============================================================
 
-// Worker: Belirli frame aralığını render eder
 async function renderWorker(
   workerId: number,
   frames: number[],
   progress: { done: number; total: number },
-  framesDir: string
+  framesDir: string,
+  devServerUrl: string,
+  templateId: string,
+  videoConfig: VideoConfig,
 ): Promise<void> {
   const browser = await puppeteer.launch({
     headless: true,
@@ -124,17 +94,29 @@ async function renderWorker(
 
   const page = await browser.newPage();
   await page.setViewport({
-    width: config.width,
-    height: config.height,
+    width: videoConfig.width,
+    height: videoConfig.height,
     deviceScaleFactor: 1,
   });
 
-  await page.setContent(html);
-  await page.waitForFunction(() => typeof (window as any).renderFrame === "function");
+  // Navigate to RenderView with the template
+  await page.goto(`${devServerUrl}?render=${templateId}`, {
+    waitUntil: "networkidle0",
+    timeout: 30000,
+  });
+
+  // Wait for React to mount and signal ready
+  await page.waitForFunction(
+    () => (window as any).__renderReady === true,
+    { timeout: 15000 },
+  );
 
   for (const frame of frames) {
-    await page.evaluate((f) => (window as any).renderFrame(f), frame);
-    await new Promise((r) => setTimeout(r, 5));
+    // Set frame via exposed __setFrame function
+    await page.evaluate((f) => (window as any).__setFrame(f), frame);
+
+    // Small delay for React re-render
+    await new Promise((r) => setTimeout(r, 16));
 
     const frameNumber = String(frame).padStart(5, "0");
     await page.screenshot({
@@ -148,14 +130,15 @@ async function renderWorker(
   await browser.close();
 }
 
-// Frame'leri worker'lara dağıt
+// ============================================================
+// Frame Distribution
+// ============================================================
+
 function distributeFrames(totalFrames: number, workerCount: number): number[][] {
   const frames: number[][] = Array.from({ length: workerCount }, () => []);
-
   for (let i = 0; i < totalFrames; i++) {
     frames[i % workerCount].push(i);
   }
-
   return frames;
 }
 
@@ -166,19 +149,39 @@ function distributeFrames(totalFrames: number, workerCount: number): number[][] 
 export async function renderVideo(options: RenderOptions = {}): Promise<RenderResult> {
   const {
     templateId,
-    outputPath = DEFAULT_OUTPUT_FILE,
+    outputPath: customOutputPath,
+    devServerUrl = DEFAULT_DEV_SERVER,
+    config: configOverride,
+    audioPath,
     onProgress,
   } = options;
 
-  const framesDir = DEFAULT_FRAMES_DIR;
   const startTime = Date.now();
 
-  // TODO: Template loading based on templateId
-  // For now, uses hardcoded template (html variable above)
+  // Resolve template config
+  let videoConfig: VideoConfig;
+
   if (templateId) {
-    // Future: Load template by ID
-    // const template = await loadTemplate(templateId);
+    try {
+      // Fetch config from the actual template via dev server
+      const templateConfig = await fetchTemplateConfig(devServerUrl, templateId);
+      videoConfig = { ...templateConfig, ...configOverride };
+    } catch {
+      // Fallback to default if template config fetch fails
+      videoConfig = { ...defaultConfig, ...configOverride };
+    }
+  } else {
+    videoConfig = { ...defaultConfig, ...configOverride };
   }
+
+  // Output path: ./output/{templateId}.mp4 or custom
+  if (!existsSync(DEFAULT_OUTPUT_DIR)) {
+    mkdirSync(DEFAULT_OUTPUT_DIR, { recursive: true });
+  }
+  const outputPath = customOutputPath || `${DEFAULT_OUTPUT_DIR}/${templateId || "output"}.mp4`;
+
+  // Frames directory: unique per job to avoid collisions
+  const framesDir = `${DEFAULT_FRAMES_DIR}-${templateId || "default"}-${Date.now()}`;
 
   // Clean up and create frames directory
   if (existsSync(framesDir)) {
@@ -186,10 +189,10 @@ export async function renderVideo(options: RenderOptions = {}): Promise<RenderRe
   }
   mkdirSync(framesDir, { recursive: true });
 
-  const frameDistribution = distributeFrames(config.durationInFrames, WORKER_COUNT);
+  const frameDistribution = distributeFrames(videoConfig.durationInFrames, WORKER_COUNT);
 
   // Progress tracking
-  const progress = { done: 0, total: config.durationInFrames };
+  const progress = { done: 0, total: videoConfig.durationInFrames };
 
   // Progress callback interval
   let progressInterval: ReturnType<typeof setInterval> | null = null;
@@ -210,14 +213,20 @@ export async function renderVideo(options: RenderOptions = {}): Promise<RenderRe
   }
 
   try {
-    // Start all workers in parallel
-    await Promise.all(
-      frameDistribution.map((frames, i) => renderWorker(i, frames, progress, framesDir))
-    );
+    if (templateId) {
+      // Real template render via dev server
+      await Promise.all(
+        frameDistribution.map((frames, i) =>
+          renderWorker(i, frames, progress, framesDir, devServerUrl, templateId, videoConfig)
+        ),
+      );
+    } else {
+      // No template specified — error
+      throw new Error("templateId is required for rendering");
+    }
 
     if (progressInterval) {
       clearInterval(progressInterval);
-      // Final progress callback
       onProgress?.({
         frame: progress.total,
         total: progress.total,
@@ -227,26 +236,24 @@ export async function renderVideo(options: RenderOptions = {}): Promise<RenderRe
     }
 
     // FFmpeg encode
-    execSync(
-      `ffmpeg -y -framerate ${config.fps} -i ${framesDir}/frame-%05d.png -c:v libx264 -pix_fmt yuv420p -preset fast ${outputPath}`,
-      { stdio: "pipe" }
-    );
+    const useAudio = audioPath && existsSync(audioPath);
+    const ffmpegCmd = useAudio
+      ? `ffmpeg -y -framerate ${videoConfig.fps} -i ${framesDir}/frame-%05d.png -i "${audioPath}" -c:v libx264 -c:a aac -pix_fmt yuv420p -shortest "${outputPath}"`
+      : `ffmpeg -y -framerate ${videoConfig.fps} -i ${framesDir}/frame-%05d.png -c:v libx264 -pix_fmt yuv420p -preset fast "${outputPath}"`;
+    execSync(ffmpegCmd, { stdio: "pipe" });
 
-    // Cleanup
+    // Cleanup frames
     rmSync(framesDir, { recursive: true });
-
-    const duration = (Date.now() - startTime) / 1000;
 
     return {
       success: true,
       outputPath,
-      duration,
+      duration: (Date.now() - startTime) / 1000,
     };
   } catch (error) {
     if (progressInterval) {
       clearInterval(progressInterval);
     }
-    // Cleanup on error
     if (existsSync(framesDir)) {
       rmSync(framesDir, { recursive: true });
     }
@@ -255,6 +262,7 @@ export async function renderVideo(options: RenderOptions = {}): Promise<RenderRe
       success: false,
       outputPath,
       duration: (Date.now() - startTime) / 1000,
+      error: error instanceof Error ? error.message : "Unknown render error",
     };
   }
 }
@@ -264,25 +272,52 @@ export async function renderVideo(options: RenderOptions = {}): Promise<RenderRe
 // ============================================================
 
 async function runCLI(): Promise<void> {
+  const args = process.argv.slice(2);
+  const templateId = args[0];
+
+  if (!templateId) {
+    console.error("Usage: bun render.ts <templateId>");
+    console.error("Example: bun render.ts cobrain-tweet");
+    console.error("\nMake sure dev server is running: bun run dev");
+    process.exit(1);
+  }
+
   console.log("");
   console.log("Framix Parallel Renderer");
   console.log("---------------------------------------------------");
-  console.log("   Resolution: " + config.width + "x" + config.height);
-  console.log("   FPS: " + config.fps);
-  console.log("   Duration: " + config.durationInFrames + " frames (" + (config.durationInFrames / config.fps).toFixed(1) + "s)");
-  console.log("   Workers: " + WORKER_COUNT + " parallel browsers");
-  console.log("   Output: " + DEFAULT_OUTPUT_FILE);
+  console.log(`   Template: ${templateId}`);
+  console.log(`   Workers: ${WORKER_COUNT} parallel browsers`);
+  console.log(`   Dev Server: ${DEFAULT_DEV_SERVER}`);
   console.log("---------------------------------------------------");
   console.log("");
 
-  console.log("Launching " + WORKER_COUNT + " browser workers...");
+  // Fetch template config first
+  console.log("Fetching template config...");
+  let videoConfig: VideoConfig;
+  try {
+    videoConfig = await fetchTemplateConfig(DEFAULT_DEV_SERVER, templateId);
+  } catch {
+    console.error("Failed to fetch template config. Is dev server running? (bun run dev)");
+    process.exit(1);
+  }
+
+  console.log(`   Resolution: ${videoConfig.width}x${videoConfig.height}`);
+  console.log(`   FPS: ${videoConfig.fps}`);
+  console.log(`   Duration: ${videoConfig.durationInFrames} frames (${(videoConfig.durationInFrames / videoConfig.fps).toFixed(1)}s)`);
+  console.log(`   Output: ${DEFAULT_OUTPUT_DIR}/${templateId}.mp4`);
+  console.log("");
   console.log("Rendering frames in parallel...\n");
 
+  const cliStartTime = Date.now() / 1000;
+
   const result = await renderVideo({
+    templateId,
     onProgress: (info) => {
-      const fps = info.frame > 0 ? (info.frame / (Date.now() / 1000 - cliStartTime)).toFixed(1) : "0";
+      const fps = info.frame > 0
+        ? (info.frame / (Date.now() / 1000 - cliStartTime)).toFixed(1)
+        : "0";
       process.stdout.write(
-        `\r   ${info.frame}/${info.total} frames (${info.percent}%) | ${fps} fps | ETA: ${info.eta}   `
+        `\r   ${info.frame}/${info.total} frames (${info.percent}%) | ${fps} fps | ETA: ${info.eta}   `,
       );
     },
   });
@@ -290,21 +325,18 @@ async function runCLI(): Promise<void> {
   if (result.success) {
     console.log(`\n\nEncoding complete!`);
     console.log("Done! Video saved to: " + result.outputPath);
-    const avgFps = (config.durationInFrames / result.duration).toFixed(1);
-    console.log("Total time: " + result.duration.toFixed(1) + "s (" + avgFps + " fps average)");
+    const avgFps = (videoConfig.durationInFrames / result.duration).toFixed(1);
+    console.log(`Total time: ${result.duration.toFixed(1)}s (${avgFps} fps average)`);
   } else {
-    console.error("\nRender failed. Check FFmpeg installation.");
+    console.error(`\nRender failed: ${result.error}`);
     process.exit(1);
   }
 }
-
-let cliStartTime = Date.now() / 1000;
 
 // ============================================================
 // CLI Entry Point
 // ============================================================
 
 if (import.meta.main) {
-  cliStartTime = Date.now() / 1000;
   runCLI().catch(console.error);
 }

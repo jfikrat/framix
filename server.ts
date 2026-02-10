@@ -1,15 +1,6 @@
 import type { ServerWebSocket } from "bun";
 import { renderVideo, type RenderOptions, type ProgressInfo, type RenderResult } from "./render";
-
-// Job types
-interface Job {
-  status: "pending" | "queued" | "rendering" | "completed" | "failed" | "cancelled";
-  templateId: string;
-  progress: ProgressInfo | null;
-  result: RenderResult | null;
-  error: string | null;
-  createdAt: number;
-}
+import { createJob, getJob, updateJob, getQueuedJobs, getActiveJobs } from "./src/store";
 
 // WebSocket data type
 interface WebSocketData {
@@ -33,9 +24,6 @@ type WSServerMessage =
 const MAX_CONCURRENT_JOBS = 1;
 let activeJobCount = 0;
 const queue: string[] = []; // jobId FIFO queue
-
-// Job storage
-const jobs = new Map<string, Job>();
 
 // WebSocket client tracking: jobId -> Set of connected clients
 const wsClients = new Map<string, Set<ServerWebSocket<WebSocketData>>>();
@@ -76,7 +64,7 @@ function subscribeClient(ws: ServerWebSocket<WebSocketData>, jobId: string): voi
   ws.send(JSON.stringify({ type: "subscribed", jobId }));
 
   // Send current state if job exists
-  const job = jobs.get(jobId);
+  const job = getJob(jobId);
   if (job) {
     if (job.progress) {
       ws.send(JSON.stringify({ type: "progress", jobId, ...job.progress }));
@@ -135,10 +123,10 @@ async function serveStaticFile(path: string): Promise<Response> {
 
 // Enqueue a job and process if slot available
 function enqueueJob(jobId: string): void {
-  const job = jobs.get(jobId);
+  const job = getJob(jobId);
   if (!job) return;
 
-  job.status = "queued";
+  updateJob(jobId, { status: "queued" });
   queue.push(jobId);
 
   const position = queue.indexOf(jobId);
@@ -153,7 +141,7 @@ function processQueue(): void {
     const nextId = queue.shift();
     if (!nextId) break;
 
-    const job = jobs.get(nextId);
+    const job = getJob(nextId);
     if (!job || job.status === "cancelled") continue;
 
     activeJobCount++;
@@ -166,41 +154,32 @@ function processQueue(): void {
 
 // Start render job
 async function startRenderJob(jobId: string, templateId: string): Promise<void> {
-  const job = jobs.get(jobId);
+  const job = getJob(jobId);
   if (!job || job.status === "cancelled") return;
 
-  job.status = "rendering";
+  updateJob(jobId, { status: "rendering" });
 
   const options: RenderOptions = {
     templateId,
     onProgress: (info: ProgressInfo) => {
-      const currentJob = jobs.get(jobId);
-      if (currentJob) {
-        currentJob.progress = info;
-        broadcastToJob(jobId, { type: "progress", jobId, ...info });
-      }
+      updateJob(jobId, { progress: info });
+      broadcastToJob(jobId, { type: "progress", jobId, ...info });
     },
   };
 
   try {
     const result = await renderVideo(options);
-    const currentJob = jobs.get(jobId);
-    if (currentJob) {
-      currentJob.status = result.success ? "completed" : "failed";
-      currentJob.result = result;
-      if (result.success) {
-        broadcastToJob(jobId, { type: "complete", jobId, result });
-      } else {
-        broadcastToJob(jobId, { type: "error", jobId, error: result.error || "Render failed" });
-      }
+    if (result.success) {
+      updateJob(jobId, { status: "completed", result });
+      broadcastToJob(jobId, { type: "complete", jobId, result });
+    } else {
+      updateJob(jobId, { status: "failed", result, error: result.error || "Render failed" });
+      broadcastToJob(jobId, { type: "error", jobId, error: result.error || "Render failed" });
     }
   } catch (error) {
-    const currentJob = jobs.get(jobId);
-    if (currentJob) {
-      currentJob.status = "failed";
-      currentJob.error = error instanceof Error ? error.message : "Unknown error";
-      broadcastToJob(jobId, { type: "error", jobId, error: currentJob.error });
-    }
+    const errorMsg = error instanceof Error ? error.message : "Unknown error";
+    updateJob(jobId, { status: "failed", error: errorMsg });
+    broadcastToJob(jobId, { type: "error", jobId, error: errorMsg });
   }
 }
 
@@ -242,16 +221,7 @@ const server = Bun.serve<WebSocketData>({
         }
 
         const jobId = generateId();
-
-        jobs.set(jobId, {
-          status: "pending",
-          templateId,
-          progress: null,
-          result: null,
-          error: null,
-          createdAt: Date.now(),
-        });
-
+        createJob(jobId, templateId);
         enqueueJob(jobId);
 
         return Response.json(
@@ -283,14 +253,7 @@ const server = Bun.serve<WebSocketData>({
 
         for (const templateId of templateIds) {
           const jobId = generateId();
-          jobs.set(jobId, {
-            status: "pending",
-            templateId,
-            progress: null,
-            result: null,
-            error: null,
-            createdAt: Date.now(),
-          });
+          createJob(jobId, templateId);
           enqueueJob(jobId);
           jobIds.push({ jobId, templateId, position: queue.indexOf(jobId) });
         }
@@ -310,7 +273,7 @@ const server = Bun.serve<WebSocketData>({
     // GET /api/queue - Queue status
     if (req.method === "GET" && pathname === "/api/queue") {
       const pending = queue.map((jobId, position) => {
-        const job = jobs.get(jobId);
+        const job = getJob(jobId);
         return {
           jobId,
           templateId: job?.templateId,
@@ -319,13 +282,11 @@ const server = Bun.serve<WebSocketData>({
         };
       });
 
-      const active = [...jobs.entries()]
-        .filter(([, job]) => job.status === "rendering")
-        .map(([jobId, job]) => ({
-          jobId,
-          templateId: job.templateId,
-          progress: job.progress,
-        }));
+      const active = getActiveJobs().map((job) => ({
+        jobId: job.id,
+        templateId: job.templateId,
+        progress: job.progress,
+      }));
 
       return Response.json(
         {
@@ -342,7 +303,7 @@ const server = Bun.serve<WebSocketData>({
     // GET /api/jobs/:id - Get job status
     if (req.method === "GET" && pathname.startsWith("/api/jobs/")) {
       const jobId = pathname.replace("/api/jobs/", "");
-      const job = jobs.get(jobId);
+      const job = getJob(jobId);
 
       if (!job) {
         return Response.json(
@@ -367,7 +328,7 @@ const server = Bun.serve<WebSocketData>({
     // DELETE /api/jobs/:id - Cancel a queued job
     if (req.method === "DELETE" && pathname.startsWith("/api/jobs/")) {
       const jobId = pathname.replace("/api/jobs/", "");
-      const job = jobs.get(jobId);
+      const job = getJob(jobId);
 
       if (!job) {
         return Response.json(
@@ -396,7 +357,7 @@ const server = Bun.serve<WebSocketData>({
         queue.splice(queueIdx, 1);
       }
 
-      job.status = "cancelled";
+      updateJob(jobId, { status: "cancelled" });
       broadcastToJob(jobId, { type: "cancelled", jobId });
 
       return Response.json(
@@ -452,6 +413,27 @@ const server = Bun.serve<WebSocketData>({
     },
   },
 });
+
+// Recover queued jobs from previous session
+const recoveredJobs = getQueuedJobs();
+if (recoveredJobs.length > 0) {
+  console.log(`Recovering ${recoveredJobs.length} queued job(s) from previous session...`);
+  for (const job of recoveredJobs) {
+    queue.push(job.id);
+  }
+  processQueue();
+}
+
+// Reset any jobs stuck in "rendering" state (server crashed mid-render)
+const stuckJobs = getActiveJobs();
+for (const job of stuckJobs) {
+  console.log(`Resetting stuck rendering job: ${job.id}`);
+  updateJob(job.id, { status: "queued" });
+  queue.push(job.id);
+}
+if (stuckJobs.length > 0) {
+  processQueue();
+}
 
 console.log(`Server running at http://localhost:${server.port}`);
 console.log(`WebSocket available at ws://localhost:${server.port}/ws`);
