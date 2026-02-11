@@ -123,7 +123,7 @@ export const Gallery: React.FC = () => {
 
     setIsRendering(true);
     try {
-      const response = await fetch("http://localhost:3001/api/render", {
+      const response = await fetch("/api/render", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ templateId: selectedId }),
@@ -331,7 +331,7 @@ export const Gallery: React.FC = () => {
       </div>
 
       {/* Render Progress Modal */}
-      <RenderProgressModal jobId={renderJobId} onClose={handleCloseModal} />
+      <RenderProgressModal jobId={renderJobId} templateId={selectedId} onClose={handleCloseModal} />
     </div>
   );
 };

@@ -3,10 +3,11 @@ import { useRenderProgress } from "../hooks/useRenderProgress";
 
 interface RenderProgressModalProps {
   jobId: string | null;
+  templateId?: string;
   onClose: () => void;
 }
 
-export const RenderProgressModal: React.FC<RenderProgressModalProps> = ({ jobId, onClose }) => {
+export const RenderProgressModal: React.FC<RenderProgressModalProps> = ({ jobId, templateId, onClose }) => {
   const progress = useRenderProgress(jobId);
 
   // Modal kapalıysa render etme
@@ -172,7 +173,7 @@ export const RenderProgressModal: React.FC<RenderProgressModalProps> = ({ jobId,
           <div style={{ marginTop: 20 }}>
             <a
               href={progress.outputUrl}
-              download
+              download={`${templateId || "output"}.mp4`}
               style={{
                 display: "block",
                 width: "100%",

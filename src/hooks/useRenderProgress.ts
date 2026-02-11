@@ -35,7 +35,7 @@ export function useRenderProgress(jobId: string | null): RenderProgress {
     setProgress((prev) => ({ ...prev, status: "connecting", error: null }));
 
     // WebSocket bağlantısı
-    const ws = new WebSocket(`ws://localhost:3001/ws?jobId=${jobId}`);
+    const ws = new WebSocket(`ws://${window.location.host}/ws?jobId=${jobId}`);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -71,7 +71,7 @@ export function useRenderProgress(jobId: string | null): RenderProgress {
               status: "completed",
               percent: 100,
               frame: prev.total,
-              outputUrl: data.result.outputPath,
+              outputUrl: (data.result.outputPath || "").replace(/^\.\//, "/"),
             }));
             break;
 

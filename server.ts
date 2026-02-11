@@ -25,6 +25,35 @@ const MAX_CONCURRENT_JOBS = 1;
 let activeJobCount = 0;
 const queue: string[] = []; // jobId FIFO queue
 
+// ─── Auto-Shutdown (idle timer) ─────────────────────
+const IDLE_TIMEOUT_MS = 60_000;
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+function startIdleTimer(): void {
+  cancelIdleTimer();
+  if (activeJobCount > 0 || queue.length > 0) return;
+
+  console.log(`[auto-shutdown] No active jobs. Shutting down in ${IDLE_TIMEOUT_MS / 1000}s...`);
+  idleTimer = setTimeout(() => {
+    console.log("[auto-shutdown] Idle timeout reached. Shutting down...");
+    for (const [, clients] of wsClients) {
+      for (const client of clients) {
+        try { client.close(); } catch {}
+      }
+    }
+    wsClients.clear();
+    process.exit(0);
+  }, IDLE_TIMEOUT_MS);
+}
+
+function cancelIdleTimer(): void {
+  if (idleTimer) {
+    clearTimeout(idleTimer);
+    idleTimer = null;
+    console.log("[auto-shutdown] Idle timer cancelled");
+  }
+}
+
 // WebSocket client tracking: jobId -> Set of connected clients
 const wsClients = new Map<string, Set<ServerWebSocket<WebSocketData>>>();
 
@@ -123,6 +152,8 @@ async function serveStaticFile(path: string): Promise<Response> {
 
 // Enqueue a job and process if slot available
 function enqueueJob(jobId: string): void {
+  cancelIdleTimer();
+
   const job = getJob(jobId);
   if (!job) return;
 
@@ -148,6 +179,7 @@ function processQueue(): void {
     startRenderJob(nextId, job.templateId).finally(() => {
       activeJobCount--;
       processQueue();
+      startIdleTimer();
     });
   }
 }
@@ -366,6 +398,14 @@ const server = Bun.serve<WebSocketData>({
       );
     }
 
+    // GET /health - Health check for auto-launcher
+    if (req.method === "GET" && pathname === "/health") {
+      return Response.json(
+        { status: "ok", activeJobs: activeJobCount, queuedJobs: queue.length },
+        { headers: corsHeaders }
+      );
+    }
+
     // Static file serving: /output/*
     if (req.method === "GET" && pathname.startsWith("/output/")) {
       const filePath = pathname.replace("/output", "");
@@ -437,3 +477,6 @@ if (stuckJobs.length > 0) {
 
 console.log(`Server running at http://localhost:${server.port}`);
 console.log(`WebSocket available at ws://localhost:${server.port}/ws`);
+
+// Start idle timer on boot (if no recovered jobs, auto-shutdown after 60s)
+startIdleTimer();

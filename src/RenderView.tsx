@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { defaultConfig, type VideoConfig, type AnimationProps } from "./animations";
+import { FrameProvider } from "./Sequence";
 import type { TemplateMeta } from "./templates/types";
 import type { AudioTrack } from "./audio/types";
 import { preloadAssets, type AssetManifest } from "./preloader";
@@ -77,8 +78,10 @@ export const RenderView: React.FC<RenderViewProps> = ({ templateId }) => {
   const { component: Component, config } = template;
 
   return (
-    <div style={{ width: config.width, height: config.height, overflow: "hidden" }}>
-      <Component frame={frame} config={config} />
-    </div>
+    <FrameProvider frame={frame} config={config}>
+      <div style={{ width: config.width, height: config.height, overflow: "hidden" }}>
+        <Component frame={frame} config={config} />
+      </div>
+    </FrameProvider>
   );
 };
