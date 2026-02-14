@@ -1,0 +1,19 @@
+{
+  "brand": "ALLBYB",
+  "colors": {
+    "primary": "#82B735",
+    "secondary": "#151515",
+    "background": "#0a0a0a",
+    "surface": "#1a1a1a",
+    "textPrimary": "#f5f5f5",
+    "textSecondary": "#8b8b8b",
+    "accent": "#D4AF37"
+  },
+  "gradients": {
+    "hero": "linear-gradient(135deg, #82B735 0%, #D4AF37 100%)"
+  },
+  "typography": {
+    "heading": { "family": "Playfair Display", "weight": "700" },
+    "body": { "family": "Inter", "weight": "400" }
+  }
+}
