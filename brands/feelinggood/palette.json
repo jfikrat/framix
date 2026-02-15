@@ -1,0 +1,11 @@
+{
+  "primary": "#F59B93",
+  "secondary": "#EAE4E1",
+  "background": "#EAE4E1",
+  "surface": "#F5F0ED",
+  "textPrimary": "#2a2a2a",
+  "textSecondary": "rgba(0,0,0,0.45)",
+  "textLight": "#f5f5f5",
+  "accent": "#D4A574",
+  "glow": "rgba(245,155,147,0.15)"
+}
