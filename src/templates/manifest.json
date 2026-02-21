@@ -1,0 +1,401 @@
+{
+  "version": 1,
+  "generatedAt": "2026-02-21T10:34:18.076Z",
+  "templates": [
+    {
+      "id": "ai-timeline",
+      "name": "AI Timeline Tweet",
+      "category": "promo",
+      "color": "#3b82f6",
+      "brand": "cobrain",
+      "file": "AITimeline.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "ai-timeline-gsap",
+      "name": "AI Timeline (GSAP)",
+      "category": "promo",
+      "color": "#8b5cf6",
+      "brand": "cobrain",
+      "file": "AITimelineGSAP.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "ai-timeline-v2",
+      "name": "AI Timeline V2",
+      "category": "promo",
+      "color": "#8b5cf6",
+      "brand": "cobrain",
+      "file": "AITimelineV2.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "allbyb-artisan-loop",
+      "name": "ALLBYB: Artisan Loop",
+      "category": "promo",
+      "brand": "allbyb",
+      "file": "AllbybArtisanLoop.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "allbyb-reel",
+      "name": "ALLBYB Reel",
+      "category": "promo",
+      "brand": "allbyb",
+      "file": "AllbybReel.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "brutal-motion",
+      "name": "Brutal Motion",
+      "category": "dynamic",
+      "color": "#FF0000",
+      "file": "BrutalMotion.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "cobrain-agent-system-vertical",
+      "name": "Cobrain: Agent System Vertical",
+      "category": "promo",
+      "color": "#22c55e",
+      "brand": "cobrain",
+      "file": "CobrainAgentSystemVertical.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "cobrain-bot-assembly",
+      "name": "Bot Assembly",
+      "category": "promo",
+      "color": "#8b5cf6",
+      "brand": "cobrain",
+      "file": "CobrainBotAssembly.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "cobrain-promo",
+      "name": "Cobrain Promo",
+      "category": "promo",
+      "color": "#3b82f6",
+      "brand": "cobrain",
+      "file": "CobrainPromo.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "cobrain-tweet",
+      "name": "Cobrain Tweet",
+      "category": "promo",
+      "color": "#8b5cf6",
+      "brand": "cobrain",
+      "file": "CobrainTweet.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "cobrain-vertical-916",
+      "name": "Cobrain: Vertical 9:16",
+      "category": "promo",
+      "color": "#8b5cf6",
+      "brand": "cobrain",
+      "file": "CobrainVertical916.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "cobrain-vertical-brutal",
+      "name": "Cobrain: Vertical Brutal",
+      "category": "promo",
+      "color": "#8b5cf6",
+      "brand": "cobrain",
+      "file": "CobrainVerticalBrutal.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "cobrain-vertical-buck",
+      "name": "Cobrain: Vertical Buck",
+      "category": "promo",
+      "color": "#8b5cf6",
+      "brand": "cobrain",
+      "file": "CobrainVerticalBuck.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "cobrain-vertical-mvm-test",
+      "name": "Cobrain: Vertical MVM Test",
+      "category": "promo",
+      "color": "#9ca3af",
+      "brand": "cobrain",
+      "file": "CobrainVerticalMVMTest.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "cobrain-vertical-meta",
+      "name": "Cobrain: Vertical Meta",
+      "category": "social",
+      "color": "#8b5cf6",
+      "brand": "cobrain",
+      "file": "CobrainVerticalMeta.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "cobrain-vertical-monolith",
+      "name": "Cobrain: Vertical Monolith",
+      "category": "promo",
+      "color": "#8b5cf6",
+      "brand": "cobrain",
+      "file": "CobrainVerticalMonolith.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "cobrain-vertical-riot",
+      "name": "Cobrain: Vertical Riot",
+      "category": "promo",
+      "color": "#d4d4d8",
+      "brand": "cobrain",
+      "file": "CobrainVerticalRiot.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "cobrain-vertical-spine",
+      "name": "Cobrain: Vertical Spine",
+      "category": "promo",
+      "color": "#8b5cf6",
+      "brand": "cobrain",
+      "file": "CobrainVerticalSpine.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "cobrain-vertical-unbound",
+      "name": "Cobrain: Vertical Unbound",
+      "category": "promo",
+      "color": "#8b5cf6",
+      "brand": "cobrain",
+      "file": "CobrainVerticalUnbound.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "confetti",
+      "name": "Confetti",
+      "category": "celebration",
+      "color": "#ffd93d",
+      "file": "Confetti.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "context-walls-v2",
+      "name": "Context Walls v2",
+      "category": "dynamic",
+      "color": "#43d7ff",
+      "file": "ContextWallsV2.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "context-walls-v3",
+      "name": "Context Walls v3",
+      "category": "dynamic",
+      "color": "#8b5cf6",
+      "file": "ContextWallsV3.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "context-walls-v4",
+      "name": "Context Walls v4",
+      "category": "dynamic",
+      "color": "#8b5cf6",
+      "file": "ContextWallsV4.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "demo-background",
+      "name": "Demo Background",
+      "category": "minimal",
+      "color": "#8b5cf6",
+      "brand": "cobrain",
+      "file": "DemoBackground.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "example-beat-sync",
+      "name": "Example: Beat Sync",
+      "category": "dynamic",
+      "color": "#8b5cf6",
+      "file": "ExampleBeatSync.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "example-inputs-demo",
+      "name": "Example: Inputs Demo",
+      "category": "promo",
+      "color": "#22c55e",
+      "file": "ExampleInputsDemo.tsx",
+      "hasInputs": true
+    },
+    {
+      "id": "example-text-animations",
+      "name": "Example: Text Animations",
+      "category": "minimal",
+      "color": "#3b82f6",
+      "file": "ExampleTextAnimations.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "gateway-mcp-ultra",
+      "name": "Gateway MCP Ultra",
+      "category": "dynamic",
+      "color": "#10b981",
+      "file": "GatewayMCPUltra.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "glitch",
+      "name": "Glitch",
+      "category": "dynamic",
+      "color": "#00ff88",
+      "file": "Glitch.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "gradient-wave",
+      "name": "Gradient Wave",
+      "category": "intro",
+      "color": "#00cec9",
+      "file": "GradientWave.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "hatay-memorial",
+      "name": "Hatay Memorial",
+      "category": "minimal",
+      "color": "#D4A574",
+      "file": "HatayMemorial.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "hatay-memorial-photo",
+      "name": "Hatay Memorial (Photo)",
+      "category": "minimal",
+      "color": "#D4A574",
+      "file": "HatayMemorialPhoto.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "heartbreaker-reel",
+      "name": "HeartBreaker Reel",
+      "category": "promo",
+      "brand": "feelinggood",
+      "file": "HeartBreakerReel.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "helm-browser-demo",
+      "name": "Helm Browser Demo",
+      "category": "promo",
+      "color": "#8b5cf6",
+      "brand": "cobrain",
+      "file": "HelmBrowserDemo.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "kinetic-type",
+      "name": "Kinetic Type",
+      "category": "dynamic",
+      "color": "#e94560",
+      "file": "KineticType.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "mcp-gateway",
+      "name": "MCP Gateway",
+      "category": "promo",
+      "color": "#FF0000",
+      "brand": "cobrain",
+      "file": "MCPGateway.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "metrics-reel",
+      "name": "Metrics Reel",
+      "category": "promo",
+      "color": "#8b5cf6",
+      "file": "MetricsReel.tsx",
+      "hasInputs": true
+    },
+    {
+      "id": "minimal-quote",
+      "name": "Minimal Quote",
+      "category": "quote",
+      "color": "#1a1a1a",
+      "file": "MinimalQuote.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "neo-brutalist-kinetic",
+      "name": "Neo Brutalist Kinetic",
+      "category": "dynamic",
+      "file": "NeoBrutalistKinetic.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "neon-glow",
+      "name": "Neon Glow",
+      "category": "promo",
+      "color": "#ff00ff",
+      "file": "NeonGlow.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "pulse",
+      "name": "Pulse",
+      "category": "minimal",
+      "color": "#ef4444",
+      "file": "Pulse.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "pulse-orbit",
+      "name": "Pulse Orbit",
+      "category": "minimal",
+      "file": "PulseOrbit.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "sonnet-gateway",
+      "name": "Sonnet 4.6 × MCP Gateway",
+      "category": "promo",
+      "color": "#D4AF37",
+      "brand": "cobrain",
+      "file": "SonnetGateway.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "split-screen",
+      "name": "Split Screen",
+      "category": "dynamic",
+      "color": "#667eea",
+      "file": "SplitScreen.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "squad-mcp",
+      "name": "Squad MCP",
+      "category": "promo",
+      "color": "#8b5cf6",
+      "brand": "cobrain",
+      "file": "SquadMCP.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "text-reveal",
+      "name": "Text Reveal",
+      "category": "intro",
+      "color": "#8b5cf6",
+      "file": "TextReveal.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "three-demo",
+      "name": "3D Showcase",
+      "category": "dynamic",
+      "color": "#8b5cf6",
+      "file": "ThreeDemo.tsx",
+      "hasInputs": false
+    }
+  ]
+}

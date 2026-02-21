@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "bun run gen-manifest && vite",
     "server": "bun run server.ts",
     "dev:full": "bun run dev & bun run server",
+    "gen-manifest": "bun run scripts/gen-manifest.ts",
     "render": "bun run render.ts",
     "wav": "bun run generate-wav.ts",
     "build": "vite build",

@@ -9,6 +9,26 @@ function isValidTemplateId(id: string): boolean {
   return VALID_TEMPLATE_ID_RE.test(id) && id.length <= 64;
 }
 
+// ─── Template Manifest ───────────────────────────────
+const MANIFEST_PATH = "./src/templates/manifest.json";
+let _knownTemplateIds: Set<string> | null = null;
+
+function getKnownTemplateIds(): Set<string> {
+  if (_knownTemplateIds) return _knownTemplateIds;
+  try {
+    const manifest = JSON.parse(require("fs").readFileSync(MANIFEST_PATH, "utf8"));
+    _knownTemplateIds = new Set(manifest.templates.map((t: { id: string }) => t.id));
+  } catch {
+    _knownTemplateIds = new Set(); // manifest not generated yet — skip check
+  }
+  return _knownTemplateIds;
+}
+
+function templateExists(id: string): boolean {
+  const ids = getKnownTemplateIds();
+  return ids.size === 0 || ids.has(id); // if manifest empty/missing, allow all
+}
+
 // WebSocket data type
 interface WebSocketData {
   jobId: string | null;
@@ -273,6 +293,13 @@ const server = Bun.serve<WebSocketData>({
           );
         }
 
+        if (!templateExists(templateId)) {
+          return Response.json(
+            { error: `Template not found: "${templateId}". Use GET /api/templates to list available templates.` },
+            { status: 404, headers: corsHeaders }
+          );
+        }
+
         const jobId = generateId();
         createJob(jobId, templateId);
         enqueueJob(jobId);
@@ -317,6 +344,14 @@ const server = Bun.serve<WebSocketData>({
           );
         }
 
+        const missingId = templateIds.find((id) => !templateExists(id));
+        if (missingId) {
+          return Response.json(
+            { error: `Template not found: "${missingId}"` },
+            { status: 404, headers: corsHeaders }
+          );
+        }
+
         const jobIds: { jobId: string; templateId: string; status: string; position: number }[] = [];
 
         for (const templateId of templateIds) {
@@ -342,6 +377,16 @@ const server = Bun.serve<WebSocketData>({
           { error: "Invalid request body" },
           { status: 400, headers: corsHeaders }
         );
+      }
+    }
+
+    // GET /api/templates - Template manifest
+    if (req.method === "GET" && pathname === "/api/templates") {
+      try {
+        const manifest = JSON.parse(require("fs").readFileSync(MANIFEST_PATH, "utf8"));
+        return Response.json(manifest, { headers: corsHeaders });
+      } catch {
+        return Response.json({ error: "Manifest not found. Run: bun run gen-manifest" }, { status: 503, headers: corsHeaders });
       }
     }
 

@@ -1,13 +1,14 @@
 #!/usr/bin/env bun
 import * as readline from 'node:readline';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { readdir } from 'node:fs/promises';
 import { listJobs } from './src/store';
 
 // Configuration
 const SERVER_URL = 'http://localhost:3001';
-const TEMPLATES_DIR = 'src/templates';
+const TEMPLATES_DIR = resolve('./src/templates');
 const OUTPUT_DIR = 'output';
+const MANIFEST_PATH = resolve('./src/templates/manifest.json');
 
 // Types
 interface JsonRpcRequest {
@@ -121,47 +122,30 @@ const TOOLS: McpTool[] = [
   },
 ];
 
-// ─── Template Scanner ─────────────────────────────────
+// ─── Manifest Loader ─────────────────────────────────
 
-async function scanTemplates() {
+interface ManifestEntry {
+  id: string;
+  name: string;
+  category?: string;
+  color?: string;
+  brand?: string;
+  file: string;
+  hasInputs: boolean;
+}
+
+async function loadManifest(): Promise<ManifestEntry[]> {
   try {
-    const files = await readdir(TEMPLATES_DIR);
-    const templates = [];
-    for (const file of files) {
-      if (!file.endsWith('.tsx') && !file.endsWith('.ts')) continue;
-      const content = await Bun.file(join(TEMPLATES_DIR, file)).text();
-      const idMatch = content.match(/id:\s*["']([^"']+)["']/);
-      const nameMatch = content.match(/name:\s*["']([^"']+)["']/);
-      if (idMatch) {
-        templates.push({
-          id: idMatch[1],
-          name: nameMatch ? nameMatch[1] : 'Unknown',
-          file,
-        });
-      }
-    }
-    return templates;
-  } catch (error) {
-    console.error('Error scanning templates:', error);
-    return [];
+    const raw = await Bun.file(MANIFEST_PATH).text();
+    return JSON.parse(raw).templates as ManifestEntry[];
+  } catch {
+    throw new Error('Manifest not found. Run: bun run gen-manifest');
   }
 }
 
-async function findTemplateFile(templateId: string) {
-  try {
-    const files = await readdir(TEMPLATES_DIR);
-    for (const file of files) {
-      if (!file.endsWith('.tsx') && !file.endsWith('.ts')) continue;
-      const content = await Bun.file(join(TEMPLATES_DIR, file)).text();
-      const idMatch = content.match(/id:\s*["']([^"']+)["']/);
-      if (idMatch && idMatch[1] === templateId) {
-        return { file, content };
-      }
-    }
-    return null;
-  } catch {
-    return null;
-  }
+async function findTemplateEntry(templateId: string): Promise<ManifestEntry | null> {
+  const templates = await loadManifest();
+  return templates.find(t => t.id === templateId) ?? null;
 }
 
 // ─── Tool Handlers ────────────────────────────────────
@@ -169,7 +153,7 @@ async function findTemplateFile(templateId: string) {
 async function handleToolCall(name: string, args: any): Promise<unknown> {
   switch (name) {
     case 'list_templates':
-      return await scanTemplates();
+      return await loadManifest();
 
     case 'get_render_status': {
       const response = await fetch(`${SERVER_URL}/api/jobs/${args.jobId}`);
@@ -224,9 +208,10 @@ async function handleToolCall(name: string, args: any): Promise<unknown> {
     }
 
     case 'read_template_source': {
-      const result = await findTemplateFile(args.templateId);
-      if (!result) throw new Error(`Template not found with ID: "${args.templateId}". Use list_templates to see available templates.`);
-      return result;
+      const entry = await findTemplateEntry(args.templateId);
+      if (!entry) throw new Error(`Template not found with ID: "${args.templateId}". Use list_templates to see available templates.`);
+      const content = await Bun.file(join(TEMPLATES_DIR, entry.file)).text();
+      return { file: entry.file, content };
     }
 
     case 'get_output_file': {
