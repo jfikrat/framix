@@ -3,6 +3,7 @@ import type { VideoConfig, AnimationProps } from "./animations"
 import { resolveInputs, validateInputs } from "./inputs"
 import type { InputSchema, InputValues } from "./inputs"
 import type { ProjectMeta, TimelineSegment } from "./templates/types"
+import type { SceneGraphDocument } from "./scene-graph"
 
 export type SceneBlueprint = {
   id: string
@@ -24,6 +25,8 @@ export type TemplateDefinition<I extends InputSchema = InputSchema> = {
   timeline?: TimelineSegment[]
   /** AI-friendly scene structure — documents what each scene does */
   blueprint?: SceneBlueprint[]
+  /** Data-driven scene graph (optional alternative or supplement to render) */
+  sceneGraph?: SceneGraphDocument
   render: (ctx: AnimationProps & { inputs: InferInputValues<I> }) => React.ReactNode
 }
 
@@ -51,6 +54,7 @@ export type DefinedTemplate<I extends InputSchema = InputSchema> = TemplateDefin
   templateConfig?: Partial<VideoConfig>
   timeline?: TimelineSegment[]
   blueprint?: SceneBlueprint[]
+  sceneGraph?: SceneGraphDocument
 }
 
 /**
@@ -145,5 +149,6 @@ export function defineTemplate<I extends InputSchema>(
     Component,
     templateConfig: def.config,
     blueprint: def.blueprint,
+    sceneGraph: def.sceneGraph,
   }
 }
