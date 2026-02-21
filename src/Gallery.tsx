@@ -36,11 +36,20 @@ function loadProjects(): Project[] {
     const meta = module.meta;
     if (!meta) continue;
 
-    const componentName = Object.keys(module).find(
-      (key) => key !== "meta" && key !== "default" && key !== "timeline" && typeof module[key] === "function"
-    );
+    // Prefer explicit "Component" export, then default, then first function found
+    const explicitComponent = (module as Record<string, unknown>).Component as React.FC<AnimationProps> | undefined;
+    const componentName = explicitComponent
+      ? undefined
+      : Object.keys(module).find(
+          (key) =>
+            key !== "meta" &&
+            key !== "default" &&
+            key !== "Component" &&
+            key !== "timeline" &&
+            typeof module[key] === "function",
+        );
 
-    const component = module.default || (componentName ? module[componentName] : null);
+    const component = explicitComponent ?? module.default ?? (componentName ? module[componentName] : null);
     if (!component || typeof component !== "function") continue;
 
     const templateConfig = (module as Record<string, unknown>).templateConfig as Partial<VideoConfig> | undefined;
@@ -58,6 +67,19 @@ function loadProjects(): Project[] {
       audioTrack,
       timeline,
     });
+  }
+
+  // DEV: warn on duplicate meta.id values
+  if (import.meta.env.DEV) {
+    const seen = new Map<string, number>();
+    for (const p of projects) {
+      seen.set(p.id, (seen.get(p.id) ?? 0) + 1);
+    }
+    for (const [id, count] of seen.entries()) {
+      if (count > 1) {
+        console.warn(`[Framix] Duplicate template id "${id}" found (${count} templates)`);
+      }
+    }
   }
 
   return projects.sort((a, b) => a.name.localeCompare(b.name));
@@ -100,6 +122,9 @@ const categoryBadge: Record<string, { label: string; color: string }> = {
   celebration: { label: "C", color: "#ec4899" },
   memorial: { label: "M", color: "#6b7280" },
   social: { label: "S", color: "#3b82f6" },
+  intro: { label: "I", color: "#64748b" },
+  quote: { label: "Q", color: "#a855f7" },
+  minimal: { label: "M", color: "#475569" },
 };
 
 const config: VideoConfig = presets.instagramStory;

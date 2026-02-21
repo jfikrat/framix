@@ -3,27 +3,41 @@ import type { ProjectMeta, TimelineSegment } from "./types";
 import type { AnimationProps } from "../animations";
 import { interpolate, spring, easing } from "../animations";
 import { Sequence, useCurrentFrame, useVideoConfig } from "../Sequence";
+import { ReelBase } from "../components/ReelBase";
+import { OverlayStack } from "../components/overlays/OverlayStack";
+import { FilmGrain } from "../components/overlays/FilmGrain";
+import { Bokeh } from "../components/overlays/Bokeh";
+import { LightLeak } from "../components/overlays/LightLeak";
+import { MaskedRevealText } from "../components/typography/MaskedRevealText";
+import { RevealText } from "../components/typography/RevealText";
+import { CinematicText } from "../components/typography/CinematicText";
 
 // ─── Brand Tokens ──────────────────────────────────────
 const C = {
-  primary: "#F59B93", // coral/salmon pink
-  secondary: "#EAE4E1", // warm beige
-  text: "#2a2a2a", // dark text on beige
-  textLight: "#f5f5f5", // light text on video
-  textMuted: "rgba(0,0,0,0.45)", // secondary text on beige
-  accent: "#D4A574", // warm gold
+  primary: "#F59B93",
+  secondary: "#EAE4E1",
+  text: "#2a2a2a",
+  textLight: "#f5f5f5",
+  textMuted: "rgba(0,0,0,0.45)",
+  accent: "#D4A574",
 };
 
 const SERIF = "'Cormorant Garamond', 'Georgia', 'Times New Roman', serif";
 const SANS = "'Inter', system-ui, -apple-system, sans-serif";
+const FONT_URL =
+  "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap";
 
-// ─── Timeline Constants ────────────────────────────────
+// ─── Timeline — Variable Pacing ─────────────────────────
+// Scenes overlap by 8-15 frames for smooth crossfades.
+// Cinematic text "beats" punch between video scenes.
 const FPS = 30;
-const INTRO = { from: 0, dur: 60 }; // 2s
-const S1 = { from: 60, dur: 150 }; // 5s
-const S2 = { from: 210, dur: 150 }; // 5s
-const S3 = { from: 360, dur: 150 }; // 5s
-const OUTRO = { from: 510, dur: 90 }; // 3s
+const INTRO = { from: 0, dur: 75 }; // 2.5s
+const S1 = { from: 60, dur: 160 }; // 5.3s — hero product, longest
+const BEAT1 = { from: 212, dur: 24 }; // 0.8s — "XOXO"
+const S2 = { from: 228, dur: 142 }; // 4.7s
+const BEAT2 = { from: 362, dur: 24 }; // 0.8s — "with love"
+const S3 = { from: 378, dur: 125 }; // 4.2s — shortest, builds urgency
+const OUTRO = { from: 495, dur: 105 }; // 3.5s
 const TOTAL = 600; // 20s
 
 // ─── Exports ───────────────────────────────────────────
@@ -45,16 +59,15 @@ export const templateConfig = {
 export const timeline: TimelineSegment[] = [
   { name: "Intro", from: INTRO.from, durationInFrames: INTRO.dur, color: C.accent },
   { name: "Bowl", from: S1.from, durationInFrames: S1.dur, color: C.primary },
+  { name: "♡ XOXO", from: BEAT1.from, durationInFrames: BEAT1.dur, color: "#e8d5d0" },
   { name: "Plate", from: S2.from, durationInFrames: S2.dur, color: C.accent },
+  { name: "♡ Love", from: BEAT2.from, durationInFrames: BEAT2.dur, color: "#e8d5d0" },
   { name: "Vase", from: S3.from, durationInFrames: S3.dur, color: C.primary },
   { name: "Outro", from: OUTRO.from, durationInFrames: OUTRO.dur, color: C.accent },
 ];
 
 // ─── Synced Video ──────────────────────────────────────
-const SyncedVideo: React.FC<{
-  src: string;
-  style?: React.CSSProperties;
-}> = ({ src, style }) => {
+const SyncedVideo: React.FC<{ src: string; style?: React.CSSProperties }> = ({ src, style }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const ref = useRef<HTMLVideoElement>(null);
@@ -73,14 +86,7 @@ const SyncedVideo: React.FC<{
       muted
       playsInline
       preload="auto"
-      style={{
-        position: "absolute",
-        inset: 0,
-        width: "100%",
-        height: "100%",
-        objectFit: "cover",
-        ...style,
-      }}
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", ...style }}
     />
   );
 };
@@ -94,24 +100,8 @@ const IntroScene: React.FC = () => {
   const logoScale = interpolate(logoSpring, [0, 1], [0.85, 1]);
   const logoOpacity = interpolate(frame, [0, 25], [0, 1], { easing: easing.easeOutCubic });
 
-  // Collection name
-  const titleDelay = 18;
-  const titleSpring = spring({ frame: Math.max(0, frame - titleDelay), fps, damping: 12, stiffness: 90 });
-  const titleY = interpolate(titleSpring, [0, 1], [30, 0]);
-  const titleOp = interpolate(titleSpring, [0, 1], [0, 1]);
-
-  // Subtitle
-  const subDelay = 28;
-  const subSpring = spring({ frame: Math.max(0, frame - subDelay), fps, damping: 14, stiffness: 100 });
-  const subY = interpolate(subSpring, [0, 1], [20, 0]);
-  const subOp = interpolate(subSpring, [0, 1], [0, 1]);
-
-  // Coral accent line
-  const lineDelay = 24;
-  const lineSpring = spring({ frame: Math.max(0, frame - lineDelay), fps, damping: 15, stiffness: 120 });
-
-  // Exit fade
-  const exitOp = interpolate(frame, [INTRO.dur - 12, INTRO.dur], [1, 0]);
+  const lineSpring = spring({ frame: Math.max(0, frame - 26), fps, damping: 15, stiffness: 120 });
+  const exitOp = interpolate(frame, [INTRO.dur - 18, INTRO.dur], [1, 0]);
 
   return (
     <div
@@ -143,54 +133,41 @@ const IntroScene: React.FC = () => {
       <img
         src="/brands/feelinggood/logo.svg"
         alt="Feeling Good Inside"
-        style={{
-          height: 200,
-          opacity: logoOpacity,
-          transform: `scale(${logoScale})`,
-        }}
+        style={{ height: 200, opacity: logoOpacity, transform: `scale(${logoScale})` }}
       />
 
-      {/* Collection name */}
-      <div
-        style={{
-          fontFamily: SERIF,
-          fontSize: 64,
-          fontWeight: 600,
-          color: C.text,
-          letterSpacing: "-0.01em",
-          lineHeight: 1.1,
-          textAlign: "center",
-          opacity: titleOp,
-          transform: `translateY(${titleY}px)`,
-        }}
-      >
-        HeartBreaker Club
-      </div>
+      {/* Collection name — masked clip reveal */}
+      <MaskedRevealText
+        lines={["HeartBreaker", "Club"]}
+        frame={Math.max(0, frame - 16)}
+        fps={fps}
+        lineDelay={6}
+        damping={12}
+        stiffness={90}
+        fontSize={64}
+        fontWeight={600}
+        fontFamily={SERIF}
+        color={C.text}
+        style={{ letterSpacing: "-0.01em" }}
+      />
 
       {/* Accent line */}
-      <div
-        style={{
-          width: interpolate(lineSpring, [0, 1], [0, 80]),
-          height: 2.5,
-          background: C.primary,
-        }}
-      />
+      <div style={{ width: interpolate(lineSpring, [0, 1], [0, 80]), height: 2.5, background: C.primary }} />
 
-      {/* Subtitle */}
-      <div
-        style={{
-          fontFamily: SANS,
-          fontSize: 22,
-          fontWeight: 400,
-          color: C.textMuted,
-          letterSpacing: "0.18em",
-          textTransform: "uppercase",
-          opacity: subOp,
-          transform: `translateY(${subY}px)`,
-        }}
-      >
-        XOXO Collection
-      </div>
+      {/* Subtitle — word reveal */}
+      <RevealText
+        text="XOXO Collection"
+        frame={Math.max(0, frame - 34)}
+        fps={fps}
+        wordDelay={6}
+        damping={14}
+        stiffness={100}
+        fontSize={22}
+        fontWeight={400}
+        fontFamily={SANS}
+        color={C.textMuted}
+        wordStyle={{ letterSpacing: "0.18em", textTransform: "uppercase" as const }}
+      />
     </div>
   );
 };
@@ -205,29 +182,21 @@ const VideoSceneContent: React.FC<{
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  // Fade in/out — slightly longer for calm feel
-  const fadeIn = interpolate(frame, [0, 20], [0, 1], { easing: easing.easeOutCubic });
-  const fadeOut = interpolate(frame, [duration - 20, duration], [1, 0], { easing: easing.easeInCubic });
+  // Crossfade envelope
+  const fadeIn = interpolate(frame, [0, 25], [0, 1], { easing: easing.easeOutCubic });
+  const fadeOut = interpolate(frame, [duration - 25, duration], [1, 0], { easing: easing.easeInCubic });
   const opacity = Math.min(fadeIn, fadeOut);
 
-  // Ken Burns — slower zoom for calm mood
+  // Ken Burns slow zoom
   const scale = interpolate(frame, [0, duration], [1.0, 1.06], { easing: easing.linear });
 
-  // Text animation
-  const textDelay = 22;
-  const textSpring = spring({ frame: Math.max(0, frame - textDelay), fps, damping: 12, stiffness: 90 });
-  const textY = interpolate(textSpring, [0, 1], [40, 0]);
-  const textOp = interpolate(textSpring, [0, 1], [0, 1]);
+  // Accent underline
+  const lineSpring = spring({ frame: Math.max(0, frame - 36), fps, damping: 15, stiffness: 120 });
 
-  // Subtext stagger
-  const subDelay = 34;
-  const subSpring = spring({ frame: Math.max(0, frame - subDelay), fps, damping: 14, stiffness: 100 });
+  // Subtext
+  const subSpring = spring({ frame: Math.max(0, frame - 40), fps, damping: 14, stiffness: 100 });
   const subY = interpolate(subSpring, [0, 1], [18, 0]);
   const subOp = interpolate(subSpring, [0, 1], [0, 1]);
-
-  // Accent underline
-  const lineDelay = 38;
-  const lineSpring = spring({ frame: Math.max(0, frame - lineDelay), fps, damping: 15, stiffness: 120 });
 
   return (
     <div style={{ position: "absolute", inset: 0, overflow: "hidden", opacity }}>
@@ -236,7 +205,7 @@ const VideoSceneContent: React.FC<{
         <SyncedVideo src={src} />
       </div>
 
-      {/* Gradient overlay — soft, bottom-heavy */}
+      {/* Gradient overlay */}
       <div
         style={{
           position: "absolute",
@@ -256,31 +225,25 @@ const VideoSceneContent: React.FC<{
       />
 
       {/* Text block */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 280,
-          width: "100%",
-          textAlign: "center",
-          padding: "0 60px",
-        }}
-      >
-        {/* Heading */}
-        <div
-          style={{
-            fontFamily: SERIF,
-            fontSize: 50,
-            fontWeight: 600,
-            color: C.textLight,
-            letterSpacing: "-0.01em",
-            lineHeight: 1.15,
-            opacity: textOp,
-            transform: `translateY(${textY}px)`,
+      <div style={{ position: "absolute", bottom: 280, width: "100%", textAlign: "center", padding: "0 60px" }}>
+        {/* Heading — word-by-word reveal */}
+        <RevealText
+          text={heading}
+          frame={Math.max(0, frame - 20)}
+          fps={fps}
+          wordDelay={8}
+          damping={12}
+          stiffness={90}
+          fontSize={50}
+          fontWeight={600}
+          fontFamily={SERIF}
+          color={C.textLight}
+          wordStyle={{
             textShadow: "0 2px 30px rgba(0,0,0,0.5)",
+            letterSpacing: "-0.01em",
+            lineHeight: "1.15",
           }}
-        >
-          {heading}
-        </div>
+        />
 
         {/* Accent underline */}
         <div
@@ -316,6 +279,27 @@ const VideoSceneContent: React.FC<{
   );
 };
 
+// ─── Cinematic Beat (pattern interrupt) ────────────────
+const CinematicBeat: React.FC<{ text: string; dur: number }> = ({ text, dur }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  return (
+    <CinematicText
+      text={text}
+      frame={frame}
+      fps={fps}
+      durationInFrames={dur}
+      fontSize={100}
+      fontWeight={300}
+      fontFamily={SERIF}
+      color={C.text}
+      accentColor={C.primary}
+      background={C.secondary}
+      style={{ letterSpacing: "0.04em" }}
+    />
+  );
+};
+
 // ─── Outro Scene ───────────────────────────────────────
 const OutroScene: React.FC = () => {
   const frame = useCurrentFrame();
@@ -327,15 +311,6 @@ const OutroScene: React.FC = () => {
 
   const lineSpring = spring({ frame: Math.max(0, frame - 18), fps, damping: 15, stiffness: 120 });
 
-  const handleSpring = spring({ frame: Math.max(0, frame - 25), fps, damping: 14, stiffness: 100 });
-  const handleY = interpolate(handleSpring, [0, 1], [15, 0]);
-  const handleOp = interpolate(handleSpring, [0, 1], [0, 1]);
-
-  const urlSpring = spring({ frame: Math.max(0, frame - 34), fps, damping: 14, stiffness: 100 });
-  const urlOp = interpolate(urlSpring, [0, 1], [0, 1]);
-  const urlY = interpolate(urlSpring, [0, 1], [12, 0]);
-
-  // Final fade
   const fadeOut = interpolate(frame, [OUTRO.dur - 20, OUTRO.dur], [1, 0], { easing: easing.easeInCubic });
 
   return (
@@ -369,52 +344,39 @@ const OutroScene: React.FC = () => {
       <img
         src="/brands/feelinggood/logo.svg"
         alt="Feeling Good Inside"
-        style={{
-          height: 160,
-          opacity: logoOp,
-          transform: `translateY(${logoY}px)`,
-        }}
+        style={{ height: 160, opacity: logoOp, transform: `translateY(${logoY}px)` }}
       />
 
       {/* Accent divider */}
-      <div
-        style={{
-          width: interpolate(lineSpring, [0, 1], [0, 60]),
-          height: 2,
-          background: C.accent,
-        }}
+      <div style={{ width: interpolate(lineSpring, [0, 1], [0, 60]), height: 2, background: C.accent }} />
+
+      {/* Handle — masked reveal */}
+      <MaskedRevealText
+        lines={["@feelinggoodinside"]}
+        frame={Math.max(0, frame - 25)}
+        fps={fps}
+        damping={14}
+        stiffness={100}
+        fontSize={20}
+        fontWeight={400}
+        fontFamily={SANS}
+        color={C.textMuted}
+        style={{ letterSpacing: "0.1em" }}
       />
 
-      {/* Handle */}
-      <div
-        style={{
-          fontFamily: SANS,
-          fontSize: 20,
-          fontWeight: 400,
-          color: C.textMuted,
-          letterSpacing: "0.1em",
-          opacity: handleOp,
-          transform: `translateY(${handleY}px)`,
-        }}
-      >
-        @feelinggoodinside
-      </div>
-
       {/* Website */}
-      <div
-        style={{
-          fontFamily: SANS,
-          fontSize: 17,
-          fontWeight: 400,
-          color: C.textMuted,
-          letterSpacing: "0.06em",
-          opacity: urlOp,
-          transform: `translateY(${urlY}px)`,
-          marginTop: 4,
-        }}
-      >
-        feelinggoodinside.com
-      </div>
+      <MaskedRevealText
+        lines={["feelinggoodinside.com"]}
+        frame={Math.max(0, frame - 34)}
+        fps={fps}
+        damping={14}
+        stiffness={100}
+        fontSize={17}
+        fontWeight={400}
+        fontFamily={SANS}
+        color={C.textMuted}
+        style={{ letterSpacing: "0.06em", marginTop: 4 }}
+      />
     </div>
   );
 };
@@ -422,25 +384,22 @@ const OutroScene: React.FC = () => {
 // ─── Main Component ────────────────────────────────────
 export const HeartBreakerReel: React.FC<AnimationProps> = ({ frame, config }) => {
   return (
-    <div
-      style={{
-        width: config.width,
-        height: config.height,
-        position: "relative",
-        overflow: "hidden",
-        background: C.secondary,
-        fontFamily: SANS,
-      }}
+    <ReelBase
+      frame={frame}
+      config={config}
+      background={C.secondary}
+      fontFamily={SANS}
+      fontImport={FONT_URL}
+      progressColors={[C.primary, C.accent]}
+      frameCounterColor="rgba(0,0,0,0.2)"
     >
-      {/* Font import */}
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');`}</style>
+      {/* ── Scenes ──────────────────────────────────── */}
 
-      {/* Intro */}
       <Sequence from={INTRO.from} durationInFrames={INTRO.dur}>
         <IntroScene />
       </Sequence>
 
-      {/* Scene 1 — Bowl */}
+      {/* Bowl — hero product, longest scene */}
       <Sequence from={S1.from} durationInFrames={S1.dur}>
         <VideoSceneContent
           src="/brands/feelinggood/video/v2-bowl-portrait.mp4"
@@ -450,7 +409,12 @@ export const HeartBreakerReel: React.FC<AnimationProps> = ({ frame, config }) =>
         />
       </Sequence>
 
-      {/* Scene 2 — Plate */}
+      {/* Cinematic beat — XOXO */}
+      <Sequence from={BEAT1.from} durationInFrames={BEAT1.dur}>
+        <CinematicBeat text="XOXO" dur={BEAT1.dur} />
+      </Sequence>
+
+      {/* Plate */}
       <Sequence from={S2.from} durationInFrames={S2.dur}>
         <VideoSceneContent
           src="/brands/feelinggood/video/v2-plate-portrait.mp4"
@@ -460,7 +424,12 @@ export const HeartBreakerReel: React.FC<AnimationProps> = ({ frame, config }) =>
         />
       </Sequence>
 
-      {/* Scene 3 — Vase */}
+      {/* Cinematic beat — with love */}
+      <Sequence from={BEAT2.from} durationInFrames={BEAT2.dur}>
+        <CinematicBeat text="with love" dur={BEAT2.dur} />
+      </Sequence>
+
+      {/* Vase — shortest, builds urgency */}
       <Sequence from={S3.from} durationInFrames={S3.dur}>
         <VideoSceneContent
           src="/brands/feelinggood/video/v2-vase-portrait.mp4"
@@ -470,38 +439,61 @@ export const HeartBreakerReel: React.FC<AnimationProps> = ({ frame, config }) =>
         />
       </Sequence>
 
-      {/* Outro */}
       <Sequence from={OUTRO.from} durationInFrames={OUTRO.dur}>
         <OutroScene />
       </Sequence>
 
-      {/* Progress bar */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          height: 3,
-          width: `${(frame / config.durationInFrames) * 100}%`,
-          background: `linear-gradient(90deg, ${C.primary}, ${C.accent})`,
-          zIndex: 10,
-        }}
-      />
+      {/* ── Overlays ────────────────────────────────── */}
+      <OverlayStack>
+        {/* Film grain — subtle organic texture */}
+        <FilmGrain frame={frame} opacity={0.04} blendMode="overlay" />
 
-      {/* Frame counter */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 12,
-          right: 16,
-          fontFamily: "'JetBrains Mono', monospace",
-          fontSize: 11,
-          color: "rgba(0,0,0,0.2)",
-          zIndex: 10,
-        }}
-      >
-        FR {String(frame).padStart(3, "0")}/{config.durationInFrames}
-      </div>
-    </div>
+        {/* Bokeh — warm floating circles */}
+        <Bokeh
+          frame={frame}
+          fps={config.fps}
+          count={8}
+          color={C.primary}
+          maxRadius={35}
+          blur={20}
+          opacityRange={[0.02, 0.06]}
+          speed={0.2}
+        />
+
+        {/* Light leaks at transition windows */}
+        <LightLeak
+          frame={frame}
+          fps={config.fps}
+          color="rgba(245,155,147,0.6)"
+          intensity={0.12}
+          activeRange={[52, 85]}
+          origin="top-right"
+        />
+        <LightLeak
+          frame={frame}
+          fps={config.fps}
+          color="rgba(212,165,116,0.5)"
+          intensity={0.1}
+          activeRange={[205, 240]}
+          origin="bottom-left"
+        />
+        <LightLeak
+          frame={frame}
+          fps={config.fps}
+          color="rgba(245,155,147,0.6)"
+          intensity={0.1}
+          activeRange={[355, 390]}
+          origin="top-left"
+        />
+        <LightLeak
+          frame={frame}
+          fps={config.fps}
+          color="rgba(212,165,116,0.5)"
+          intensity={0.12}
+          activeRange={[488, 510]}
+          origin="center"
+        />
+      </OverlayStack>
+    </ReelBase>
   );
 };

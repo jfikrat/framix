@@ -1,6 +1,22 @@
 import React, { createContext, useContext } from "react";
 import type { VideoConfig } from "./animations";
 
+// ─── Global Frame Context ────────────────────────────
+// Holds the top-level (global) frame number.
+// FrameProvider sets it; Sequence never overrides it.
+const GlobalFrameContext = createContext<number | null>(null);
+
+/**
+ * Get the global (top-level) frame number from anywhere in the tree,
+ * even when nested inside <Sequence> components.
+ */
+export function useGlobalFrame(): number {
+  const globalFrame = useContext(GlobalFrameContext);
+  if (globalFrame === null)
+    throw new Error("useGlobalFrame must be used within a FrameProvider");
+  return globalFrame;
+}
+
 // ─── Frame Context ───────────────────────────────────
 interface FrameContextValue {
   frame: number;
@@ -18,9 +34,11 @@ export const FrameProvider: React.FC<{
   config: VideoConfig;
   children: React.ReactNode;
 }> = ({ frame, config, children }) => (
-  <FrameContext.Provider value={{ frame, config }}>
-    {children}
-  </FrameContext.Provider>
+  <GlobalFrameContext.Provider value={frame}>
+    <FrameContext.Provider value={{ frame, config }}>
+      {children}
+    </FrameContext.Provider>
+  </GlobalFrameContext.Provider>
 );
 
 /**
@@ -69,8 +87,15 @@ export const Sequence: React.FC<SequenceProps> = ({ from = 0, durationInFrames, 
   // Not in range — don't render
   if (localFrame < 0 || localFrame >= durationInFrames) return null;
 
+  // Scope config.durationInFrames to this Sequence's local duration
+  // so that presets using ctx.durationInFrames work correctly within the Sequence.
+  const localConfig: VideoConfig = {
+    ...parentCtx.config,
+    durationInFrames,
+  };
+
   return (
-    <FrameContext.Provider value={{ frame: localFrame, config: parentCtx.config }}>
+    <FrameContext.Provider value={{ frame: localFrame, config: localConfig }}>
       {children}
     </FrameContext.Provider>
   );

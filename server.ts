@@ -1,6 +1,13 @@
 import type { ServerWebSocket } from "bun";
+import { resolve, join } from "path";
 import { renderVideo, type RenderOptions, type ProgressInfo, type RenderResult } from "./render";
 import { createJob, getJob, updateJob, getQueuedJobs, getActiveJobs } from "./src/store";
+
+// templateId validation — must be a safe slug (mirrors render.ts)
+const VALID_TEMPLATE_ID_RE = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/;
+function isValidTemplateId(id: string): boolean {
+  return VALID_TEMPLATE_ID_RE.test(id) && id.length <= 64;
+}
 
 // WebSocket data type
 interface WebSocketData {
@@ -135,8 +142,15 @@ function generateId(): string {
 
 // Serve static files from output directory
 async function serveStaticFile(path: string): Promise<Response> {
-  const filePath = `./output${path}`;
-  const file = Bun.file(filePath);
+  const outputRoot = resolve("./output");
+  const requestedPath = resolve(join(outputRoot, path));
+
+  // Reject if resolved path escapes the output root (path traversal guard)
+  if (!requestedPath.startsWith(outputRoot + "/") && requestedPath !== outputRoot) {
+    return new Response("Forbidden", { status: 403, headers: corsHeaders });
+  }
+
+  const file = Bun.file(requestedPath);
 
   if (await file.exists()) {
     return new Response(file, {
@@ -252,12 +266,25 @@ const server = Bun.serve<WebSocketData>({
           );
         }
 
+        if (!isValidTemplateId(templateId)) {
+          return Response.json(
+            { error: "Invalid templateId format" },
+            { status: 400, headers: corsHeaders }
+          );
+        }
+
         const jobId = generateId();
         createJob(jobId, templateId);
         enqueueJob(jobId);
 
+        // Job may already be dequeued and processing (immediately started)
+        const queuePosition = queue.indexOf(jobId);
         return Response.json(
-          { jobId, status: "queued", position: queue.indexOf(jobId) },
+          {
+            jobId,
+            status: queuePosition >= 0 ? "queued" : "processing",
+            position: Math.max(0, queuePosition),
+          },
           { status: 202, headers: corsHeaders }
         );
       } catch {
@@ -281,13 +308,29 @@ const server = Bun.serve<WebSocketData>({
           );
         }
 
-        const jobIds: { jobId: string; templateId: string; position: number }[] = [];
+        // Validate all templateIds up-front before creating any jobs
+        const invalidId = templateIds.find((id) => !isValidTemplateId(id));
+        if (invalidId) {
+          return Response.json(
+            { error: `Invalid templateId format: "${invalidId}"` },
+            { status: 400, headers: corsHeaders }
+          );
+        }
+
+        const jobIds: { jobId: string; templateId: string; status: string; position: number }[] = [];
 
         for (const templateId of templateIds) {
           const jobId = generateId();
           createJob(jobId, templateId);
           enqueueJob(jobId);
-          jobIds.push({ jobId, templateId, position: queue.indexOf(jobId) });
+          // Job may already be dequeued and processing (immediately started)
+          const queuePosition = queue.indexOf(jobId);
+          jobIds.push({
+            jobId,
+            templateId,
+            status: queuePosition >= 0 ? "queued" : "processing",
+            position: Math.max(0, queuePosition),
+          });
         }
 
         return Response.json(

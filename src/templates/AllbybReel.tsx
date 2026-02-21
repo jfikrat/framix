@@ -3,19 +3,10 @@ import type { ProjectMeta, TimelineSegment } from "./types";
 import type { AnimationProps } from "../animations";
 import { interpolate, spring, easing } from "../animations";
 import { Sequence, useCurrentFrame, useVideoConfig } from "../Sequence";
+import { allbybAssets, allbybColors as C, allbybFonts } from "./allbybTokens";
 
-// ─── Brand Tokens ──────────────────────────────────────
-const C = {
-  primary: "#82B735",
-  accent: "#D4AF37",
-  bg: "#0a0a0a",
-  surface: "#1a1a1a",
-  text: "#f5f5f5",
-  textMuted: "rgba(255,255,255,0.5)",
-};
-
-const SERIF = "'Playfair Display', 'Georgia', 'Times New Roman', serif";
-const SANS = "'Inter', system-ui, -apple-system, sans-serif";
+const SERIF = allbybFonts.serif;
+const SANS = allbybFonts.sans;
 
 // ─── Timeline Constants ────────────────────────────────
 const FPS = 30;
@@ -41,6 +32,8 @@ export const templateConfig = {
   fps: FPS,
   durationInFrames: TOTAL,
 };
+
+export const assets = allbybAssets;
 
 export const timeline: TimelineSegment[] = [
   { name: "Intro", from: INTRO.from, durationInFrames: INTRO.dur, color: C.accent },
@@ -427,9 +420,6 @@ export const AllbybReel: React.FC<AnimationProps> = ({ frame, config }) => {
         fontFamily: SANS,
       }}
     >
-      {/* Font import */}
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');`}</style>
-
       {/* Intro */}
       <Sequence from={INTRO.from} durationInFrames={INTRO.dur}>
         <IntroScene />
@@ -489,7 +479,7 @@ export const AllbybReel: React.FC<AnimationProps> = ({ frame, config }) => {
           position: "absolute",
           bottom: 12,
           right: 16,
-          fontFamily: "'JetBrains Mono', monospace",
+          fontFamily: allbybFonts.mono,
           fontSize: 11,
           color: "rgba(255,255,255,0.25)",
           zIndex: 10,

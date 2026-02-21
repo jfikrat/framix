@@ -29,8 +29,8 @@ export function mixTrack(
   };
 
   for (const event of track.events) {
-    // Render mono samples for this event
-    const mono = renderEvent(event, sampleRate, fps);
+    // Render mono samples for this event (pass bpm for durationBeats support)
+    const mono = renderEvent(event, sampleRate, fps, timeConfig.bpm);
 
     // Calculate start position
     let startFrame = event.frame ?? 0;

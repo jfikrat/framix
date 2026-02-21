@@ -1,5 +1,5 @@
 import puppeteer from "puppeteer";
-import { execSync } from "child_process";
+import { spawnSync } from "child_process";
 import { mkdirSync, rmSync, existsSync } from "fs";
 import { cpus } from "os";
 import { defaultConfig, type VideoConfig } from "./src/animations";
@@ -39,6 +39,14 @@ const DEFAULT_DEV_SERVER = "http://localhost:4200";
 const DEFAULT_FRAMES_DIR = "/tmp/framix-frames";
 const DEFAULT_OUTPUT_DIR = "./output";
 const WORKER_COUNT = Math.min(cpus().length, 8);
+
+// ============================================================
+// Validation
+// ============================================================
+
+function isValidTemplateId(id: string): boolean {
+  return /^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(id) && id.length <= 64;
+}
 
 // ============================================================
 // Template Config Fetcher
@@ -158,18 +166,23 @@ export async function renderVideo(options: RenderOptions = {}): Promise<RenderRe
 
   const startTime = Date.now();
 
+  // Validate templateId to prevent shell injection / path traversal
+  if (templateId && !isValidTemplateId(templateId)) {
+    return {
+      success: false,
+      outputPath: "",
+      duration: 0,
+      error: `Invalid templateId: "${templateId}". Must match ^[a-z0-9][a-z0-9-]*[a-z0-9]$ and be <= 64 chars.`,
+    };
+  }
+
   // Resolve template config
   let videoConfig: VideoConfig;
 
   if (templateId) {
-    try {
-      // Fetch config from the actual template via dev server
-      const templateConfig = await fetchTemplateConfig(devServerUrl, templateId);
-      videoConfig = { ...templateConfig, ...configOverride };
-    } catch {
-      // Fallback to default if template config fetch fails
-      videoConfig = { ...defaultConfig, ...configOverride };
-    }
+    // Fetch config from the actual template via dev server — let errors propagate
+    const templateConfig = await fetchTemplateConfig(devServerUrl, templateId);
+    videoConfig = { ...templateConfig, ...configOverride };
   } else {
     videoConfig = { ...defaultConfig, ...configOverride };
   }
@@ -235,12 +248,26 @@ export async function renderVideo(options: RenderOptions = {}): Promise<RenderRe
       });
     }
 
-    // FFmpeg encode
+    // FFmpeg encode — use arg array (not shell string) to prevent injection
     const useAudio = audioPath && existsSync(audioPath);
-    const ffmpegCmd = useAudio
-      ? `ffmpeg -y -framerate ${videoConfig.fps} -i ${framesDir}/frame-%05d.png -i "${audioPath}" -c:v libx264 -c:a aac -pix_fmt yuv420p -shortest "${outputPath}"`
-      : `ffmpeg -y -framerate ${videoConfig.fps} -i ${framesDir}/frame-%05d.png -c:v libx264 -pix_fmt yuv420p -preset fast "${outputPath}"`;
-    execSync(ffmpegCmd, { stdio: "pipe" });
+    const ffmpegArgs = useAudio
+      ? [
+          "-y", "-framerate", String(videoConfig.fps),
+          "-i", `${framesDir}/frame-%05d.png`,
+          "-i", audioPath,
+          "-c:v", "libx264", "-c:a", "aac",
+          "-pix_fmt", "yuv420p", "-shortest", outputPath,
+        ]
+      : [
+          "-y", "-framerate", String(videoConfig.fps),
+          "-i", `${framesDir}/frame-%05d.png`,
+          "-c:v", "libx264", "-pix_fmt", "yuv420p",
+          "-preset", "fast", outputPath,
+        ];
+    const ffmpegResult = spawnSync("ffmpeg", ffmpegArgs, { stdio: "pipe" });
+    if (ffmpegResult.status !== 0) {
+      throw new Error(`FFmpeg failed: ${ffmpegResult.stderr?.toString() || "unknown error"}`);
+    }
 
     // Cleanup frames
     rmSync(framesDir, { recursive: true });
@@ -279,6 +306,12 @@ async function runCLI(): Promise<void> {
     console.error("Usage: bun render.ts <templateId>");
     console.error("Example: bun render.ts cobrain-tweet");
     console.error("\nMake sure dev server is running: bun run dev");
+    process.exit(1);
+  }
+
+  if (!isValidTemplateId(templateId)) {
+    console.error(`Error: Invalid templateId "${templateId}".`);
+    console.error("Must match ^[a-z0-9][a-z0-9-]*[a-z0-9]$ and be at most 64 characters.");
     process.exit(1);
   }
 

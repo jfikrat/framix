@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { defaultConfig, type VideoConfig, type AnimationProps } from "./animations";
 import { FrameProvider } from "./Sequence";
 import type { TemplateMeta } from "./templates/types";
@@ -19,10 +19,18 @@ function findTemplate(templateId: string) {
     const meta = module.meta;
     if (!meta || meta.id !== templateId) continue;
 
-    const componentName = Object.keys(module).find(
-      (key) => key !== "meta" && key !== "default" && typeof module[key] === "function"
-    );
-    const component = module.default || (componentName ? module[componentName] : null);
+    // Prefer explicit "Component" export, then default, then first function found
+    const explicitComponent = (module as Record<string, unknown>).Component as React.FC<AnimationProps> | undefined;
+    const componentName = explicitComponent
+      ? undefined
+      : Object.keys(module).find(
+          (key) =>
+            key !== "meta" &&
+            key !== "default" &&
+            key !== "Component" &&
+            typeof module[key] === "function",
+        );
+    const component = explicitComponent ?? module.default ?? (componentName ? module[componentName] : null);
     if (!component || typeof component !== "function") continue;
 
     const templateConfig = (module as Record<string, unknown>).templateConfig as
@@ -46,7 +54,9 @@ interface RenderViewProps {
 
 export const RenderView: React.FC<RenderViewProps> = ({ templateId }) => {
   const [frame, setFrame] = useState(0);
-  const template = findTemplate(templateId);
+  // Memoize so findTemplate only re-runs when templateId changes,
+  // not on every frame re-render (fixes useEffect re-run on every frame).
+  const template = useMemo(() => findTemplate(templateId), [templateId]);
 
   useEffect(() => {
     if (!template) return;

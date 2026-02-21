@@ -63,19 +63,7 @@ export interface CameraState {
 
 // ─── MATH HELPERS ───────────────────────────────────
 
-/** Deterministic noise: seed → [-1, 1] */
-function noise(seed: number): number {
-  const x = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
-  return (x - Math.floor(x)) * 2 - 1;
-}
-
-/** Smoothed noise with hermite interpolation */
-function smoothNoise(t: number, seed: number): number {
-  const i = Math.floor(t);
-  const f = t - i;
-  const s = f * f * (3 - 2 * f);
-  return noise(i + seed * 1000) * (1 - s) + noise(i + 1 + seed * 1000) * s;
-}
+import { noise, smoothNoise } from "./math";
 
 /** Linear lerp for 3-tuple */
 function lerp3(
@@ -126,7 +114,9 @@ function findSegment(keyframes: CameraKeyframe[], frame: number) {
 
   for (let i = 0; i < last; i++) {
     if (frame >= keyframes[i].frame && frame < keyframes[i + 1].frame) {
-      const t = (frame - keyframes[i].frame) / (keyframes[i + 1].frame - keyframes[i].frame);
+      // Guard against zero-length segment (two keyframes with the same frame number)
+      const span = keyframes[i + 1].frame - keyframes[i].frame;
+      const t = span === 0 ? 0 : (frame - keyframes[i].frame) / span;
       return { index: i, t };
     }
   }
@@ -165,6 +155,8 @@ export function computeCamera(options: CameraOptions): CameraState {
   }
 
   // ── Keyframes ──
+  // When orbit is active, it owns the position; keyframes may still supply lookAt and FOV.
+  const orbitOverride = !!orbit;
   if (keyframes && keyframes.length >= 2) {
     const { index, t } = findSegment(keyframes, frame);
     const kA = keyframes[index];
@@ -175,7 +167,9 @@ export function computeCamera(options: CameraOptions): CameraState {
     if (interpolation === "catmullrom") {
       const kPrev = keyframes[Math.max(0, index - 1)];
       const kNext = keyframes[Math.min(keyframes.length - 1, index + 2)];
-      position = catmullRom3(kPrev.position, kA.position, kB.position, kNext.position, t);
+      if (!orbitOverride) {
+        position = catmullRom3(kPrev.position, kA.position, kB.position, kNext.position, t);
+      }
       const lPrev: [number, number, number] = kPrev.lookAt ?? lookA;
       const lNext: [number, number, number] = kNext.lookAt ?? lookB;
       lookAt = catmullRom3(lPrev, lookA, lookB, lNext, t);
@@ -188,14 +182,18 @@ export function computeCamera(options: CameraOptions): CameraState {
         stiffness: springConfig?.stiffness ?? 80,
         mass: springConfig?.mass ?? 1,
       });
-      position = lerp3(kA.position, kB.position, s);
+      if (!orbitOverride) {
+        position = lerp3(kA.position, kB.position, s);
+      }
       lookAt = lerp3(lookA, lookB, s);
     } else {
-      position = lerp3(kA.position, kB.position, t);
+      if (!orbitOverride) {
+        position = lerp3(kA.position, kB.position, t);
+      }
       lookAt = lerp3(lookA, lookB, t);
     }
 
-    // FOV
+    // FOV interpolation applies regardless of orbit
     fov = (kA.fov ?? 50) + ((kB.fov ?? 50) - (kA.fov ?? 50)) * t;
   }
 
@@ -210,7 +208,9 @@ export function computeCamera(options: CameraOptions): CameraState {
       if (frame < start || frame > end) {
         active = false;
       } else {
-        const progress = (frame - start) / (end - start);
+        // Guard against start === end (zero-length range) to prevent division by zero
+        const span = end - start;
+        const progress = span === 0 ? 0 : (frame - start) / span;
         intensity *= 1 - progress * (shake.decay ?? 0);
       }
     }

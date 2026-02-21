@@ -114,9 +114,17 @@ function applyDistortion(sample: number, amount: number): number {
   return Math.tanh(k * sample) / Math.tanh(k);
 }
 
-export function renderEvent(event: AudioEvent, sampleRate: number, fps: number): Float32Array {
-  // Duration: use durationBeats if available, else frame-based
-  const durationSeconds = event.duration / fps;
+export function renderEvent(
+  event: AudioEvent,
+  sampleRate: number,
+  fps: number,
+  bpm?: number,
+): Float32Array {
+  // Duration: prefer durationBeats (requires bpm) over frame-based duration
+  const durationSeconds =
+    event.durationBeats !== undefined && bpm !== undefined && bpm > 0
+      ? (event.durationBeats * 60) / bpm
+      : event.duration / fps;
   const totalSamples = Math.round(durationSeconds * sampleRate);
   const samples = new Float32Array(totalSamples);
 
