@@ -31,12 +31,19 @@ export type MotionSpec = {
   at?: number
   for?: number
   mix?: MotionMix
+  fillMode?: "none" | "forwards" | "backwards" | "both"
 }
 
 export type MotionPresetFn<P = Record<string, unknown>> = (
   ctx: MotionCtx,
   params: P
 ) => MotionChannels
+
+export type PresetMeta = {
+  description?: string
+  params?: Record<string, { type: string; default?: unknown; min?: number; max?: number; description?: string }>
+  category?: "enter" | "exit" | "loop" | "fx"
+}
 
 const clamp = (value: number, min = 0, max = 1): number =>
   Math.min(max, Math.max(min, value))
@@ -67,14 +74,30 @@ const defaultMixForChannel = (key: keyof MotionChannels): MotionMix =>
     ? "multiply"
     : "add"
 
-const presetRegistry = new Map<string, MotionPresetFn>()
+const presetRegistry = new Map<string, { fn: MotionPresetFn; meta?: PresetMeta }>()
 
-export function registerPreset(name: string, fn: MotionPresetFn): void {
-  presetRegistry.set(name, fn)
+export let motionStrictMode = false
+
+export function setMotionStrictMode(strict: boolean): void {
+  motionStrictMode = strict
+}
+
+export function registerPreset(name: string, fn: MotionPresetFn, opts?: { override?: boolean; meta?: PresetMeta }): void {
+  if (presetRegistry.has(name) && !opts?.override) {
+    if (import.meta.env.DEV) {
+      console.warn(`[Motion] Preset "${name}" already registered. Use { override: true } to replace it.`)
+    }
+    return
+  }
+  presetRegistry.set(name, { fn, meta: opts?.meta })
 }
 
 export function getPreset(name: string): MotionPresetFn | undefined {
-  return presetRegistry.get(name)
+  return presetRegistry.get(name)?.fn
+}
+
+export function listPresets(): Array<{ name: string; meta?: PresetMeta }> {
+  return Array.from(presetRegistry.entries()).map(([name, { meta }]) => ({ name, meta }))
 }
 
 const applyChannel = (
@@ -116,15 +139,33 @@ export function evaluateMotion(specs: MotionSpec[], ctx: MotionCtx): MotionChann
   for (const spec of specs) {
     const preset = getPreset(spec.preset)
     if (!preset) {
+      if (motionStrictMode) {
+        throw new Error('[Motion] Unknown preset: "' + spec.preset + '"')
+      }
       if (import.meta.env.DEV) console.warn(`[Motion] Unknown preset: "${spec.preset}"`)
       continue
     }
 
     const startFrame = toNumber(spec.at, 0)
     const localDuration = spec.for ?? ctx.durationInFrames - startFrame
-    const localFrame = ctx.frame - startFrame
+    let localFrame = ctx.frame - startFrame
+    const fillMode = spec.fillMode ?? "none"
 
-    if (localDuration <= 0 || localFrame < 0 || localFrame >= localDuration) continue
+    if (localFrame >= localDuration) {
+      if (fillMode === "forwards" || fillMode === "both") {
+        localFrame = localDuration - 1
+      } else {
+        continue
+      }
+    } else if (localFrame < 0) {
+      if (fillMode === "backwards" || fillMode === "both") {
+        localFrame = 0
+      } else {
+        continue
+      }
+    }
+
+    if (localDuration <= 0) continue
 
     const scopedCtx: MotionCtx = {
       ...ctx,
@@ -209,6 +250,15 @@ registerPreset("enter.fadeInUp", (ctx, rawParams) => {
     opacity: p,
     y: interpolate(p, [0, 1], [toNumber(params.distance, 40), 0]),
   }
+}, {
+  meta: {
+    category: "enter",
+    description: "Fades in while moving up",
+    params: {
+      duration: { type: "number", default: 20, description: "Duration in frames" },
+      distance: { type: "number", default: 40, description: "Distance in px to travel upward" },
+    },
+  },
 })
 
 registerPreset("enter.fadeInDown", (ctx, rawParams) => {
@@ -250,6 +300,17 @@ registerPreset("enter.scalePop", (ctx, rawParams) => {
     mass: typeof params.mass === "number" ? params.mass : undefined,
   })
   return { opacity: clamp(progress, 0, 1), scale: clamp(progress, 0, 1) }
+}, {
+  meta: {
+    category: "enter",
+    description: "Spring-based scale and fade in",
+    params: {
+      duration: { type: "number", default: 20 },
+      damping: { type: "number", default: 10, description: "Spring damping (lower = bouncier)" },
+      stiffness: { type: "number", description: "Spring stiffness" },
+      mass: { type: "number", description: "Spring mass" },
+    },
+  },
 })
 
 registerPreset("enter.blurIn", (ctx, rawParams) => {
@@ -273,6 +334,14 @@ registerPreset("exit.fadeOut", (ctx, rawParams) => {
   const params = toParams(rawParams)
   const p = linear(ctx, toNumber(params.duration, 20))
   return { opacity: 1 - p }
+}, {
+  meta: {
+    category: "exit",
+    description: "Simple fade out",
+    params: {
+      duration: { type: "number", default: 20 },
+    },
+  },
 })
 
 registerPreset("exit.fadeOutDown", (ctx, rawParams) => {
@@ -334,6 +403,16 @@ registerPreset("loop.float", (ctx, rawParams) => {
   const seed = toNumber(params.seed, DEFAULT_SEED)
   const phase = TAU * (ctx.frame / Math.max(1, ctx.fps)) * freq + seededRandom(seed) * TAU
   return { y: Math.sin(phase) * amp }
+}, {
+  meta: {
+    category: "loop",
+    description: "Vertical floating motion",
+    params: {
+      amp: { type: "number", default: 8, description: "Amplitude in px" },
+      freq: { type: "number", default: 0.8, description: "Frequency in Hz" },
+      seed: { type: "number", default: 0, description: "Phase offset seed" },
+    },
+  },
 })
 
 registerPreset("loop.wiggle", (ctx, rawParams) => {
@@ -402,4 +481,14 @@ registerPreset("fx.shake", (ctx, rawParams) => {
     x: smoothNoise(t + seed, seed + 1) * intensity,
     y: smoothNoise(t + 23 + seed, seed + 2) * intensity,
   }
+}, {
+  meta: {
+    category: "fx",
+    description: "Deterministic shake/vibration effect",
+    params: {
+      intensity: { type: "number", default: 4, description: "Shake amplitude in px" },
+      freq: { type: "number", default: 8, description: "Shake frequency in Hz" },
+      seed: { type: "number", default: 0, description: "Deterministic seed" },
+    },
+  },
 })

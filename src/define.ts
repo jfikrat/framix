@@ -47,9 +47,10 @@ export type AnimationPropsWithInputs = AnimationProps & {
 /** Legacy-compatible output shape (Gallery auto-discovery needs meta + Component) */
 export type DefinedTemplate<I extends InputSchema = InputSchema> = TemplateDefinition<I> & {
   meta: ProjectMeta
-  Component: React.FC<AnimationPropsWithInputs>
+  Component: React.FC<AnimationProps & { inputs?: Partial<InferInputValues<I>> }>
   templateConfig?: Partial<VideoConfig>
   timeline?: TimelineSegment[]
+  blueprint?: SceneBlueprint[]
 }
 
 /**
@@ -77,6 +78,43 @@ export function defineTemplate<I extends InputSchema>(
     if (typeof def.render !== "function") missing.push("render")
     if (missing.length > 0) {
       console.warn(`[defineTemplate] Missing required fields: ${missing.join(", ")}`)
+    }
+
+    const maxDuration = def.config?.durationInFrames
+    if (maxDuration) {
+      // Timeline validation
+      if (def.timeline) {
+        const names = new Set<string>()
+        for (const seg of def.timeline) {
+          if (names.has(seg.name)) {
+            console.warn(`[defineTemplate:${def.meta.id}] Duplicate timeline segment name: "${seg.name}"`)
+          }
+          names.add(seg.name)
+          if (seg.from + seg.durationInFrames > maxDuration) {
+            console.warn(
+              `[defineTemplate:${def.meta.id}] Timeline segment "${seg.name}" exceeds duration ` +
+              `(${seg.from + seg.durationInFrames} > ${maxDuration})`
+            )
+          }
+        }
+      }
+
+      // Blueprint validation
+      if (def.blueprint) {
+        const ids = new Set<string>()
+        for (const scene of def.blueprint) {
+          if (ids.has(scene.id)) {
+            console.warn(`[defineTemplate:${def.meta.id}] Duplicate blueprint scene id: "${scene.id}"`)
+          }
+          ids.add(scene.id)
+          if (scene.from + scene.durationInFrames > maxDuration) {
+            console.warn(
+              `[defineTemplate:${def.meta.id}] Blueprint scene "${scene.id}" exceeds duration ` +
+              `(${scene.from + scene.durationInFrames} > ${maxDuration})`
+            )
+          }
+        }
+      }
     }
   }
 
@@ -106,5 +144,6 @@ export function defineTemplate<I extends InputSchema>(
     meta,
     Component,
     templateConfig: def.config,
+    blueprint: def.blueprint,
   }
 }

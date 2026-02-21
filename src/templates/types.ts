@@ -12,7 +12,7 @@ export interface ProjectMeta {
   id: string;
   name: string;
   brand?: string;
-  category: "intro" | "promo" | "dynamic" | "quote" | "celebration" | "minimal";
+  category: "intro" | "promo" | "dynamic" | "quote" | "celebration" | "minimal" | "social";
   color: string;
   inputs?: InputSchema;
 }

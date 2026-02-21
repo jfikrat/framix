@@ -19,6 +19,38 @@ export interface InputField {
 export type InputSchema = Record<string, InputField>;
 export type InputValues = Record<string, string | number | boolean>;
 
+// ─── Safe coercers ───────────────────────────────────
+
+function coerceNumber(provided: string | number | boolean, fieldDefault: string | number | boolean, key: string): number {
+  if (typeof provided === "number") {
+    if (!Number.isFinite(provided)) {
+      if (import.meta.env.DEV) {
+        console.warn(`[Inputs] Non-finite number (${provided}) for field "${key}". Using default.`)
+      }
+      return typeof fieldDefault === "number" ? fieldDefault : 0
+    }
+    return provided
+  }
+  if (typeof provided === "boolean") return provided ? 1 : 0
+  // string
+  const parsed = parseFloat(provided)
+  if (Number.isNaN(parsed)) {
+    if (import.meta.env.DEV) {
+      console.warn(`[Inputs] Cannot coerce "${provided}" to number for field "${key}". Using default.`)
+    }
+    return typeof fieldDefault === "number" ? fieldDefault : 0
+  }
+  return parsed
+}
+
+function coerceBoolean(provided: string | number | boolean): boolean {
+  if (typeof provided === "boolean") return provided
+  if (typeof provided === "number") return provided !== 0
+  // string
+  const lower = provided.toLowerCase()
+  return lower !== "false" && lower !== "0" && lower !== ""
+}
+
 // ─── Resolve & Validate ──────────────────────────────
 
 /**
@@ -37,10 +69,10 @@ export function resolveInputs(
     if (provided !== undefined && provided !== null) {
       switch (field.type) {
         case "number":
-          result[key] = Number(provided);
+          result[key] = coerceNumber(provided, field.default, key);
           break;
         case "boolean":
-          result[key] = Boolean(provided);
+          result[key] = coerceBoolean(provided);
           break;
         default:
           result[key] = String(provided);
