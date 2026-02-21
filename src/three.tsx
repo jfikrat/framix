@@ -7,7 +7,8 @@
 // CSS transform'ları hesaba katar ve scale'lenmiş küçük boyutu döndürür.
 // Çözüm: offsetSize:true → offsetWidth/Height kullanır, transform'dan etkilenmez.
 
-import { Canvas, useThree, useFrame } from "@react-three/fiber";
+import { useEffect } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { VideoConfig } from "./animations";
 
@@ -18,20 +19,18 @@ interface FramixCanvasProps {
   style?: React.CSSProperties;
 }
 
-// Güvenlik katmanı: ResizeObserver canvas boyutunu yanlış set ederse
-// her frame'de düzeltir. gl.setSize(w, h, false) → buffer'ı set eder,
-// CSS style'a dokunmaz.
+// Güvenlik katmanı: dimensions değiştiğinde buffer'ı düzeltir, invalidate() ile
+// tek frame tetikler. frameloop="demand" ile uyumlu (useFrame loop yok).
 const SizeEnforcer: React.FC<{ width: number; height: number }> = ({ width, height }) => {
-  useFrame(({ gl, camera }) => {
-    const canvas = gl.domElement;
-    if (canvas.width !== width || canvas.height !== height) {
-      gl.setSize(width, height, false);
-      if (camera instanceof THREE.PerspectiveCamera) {
-        camera.aspect = width / height;
-        camera.updateProjectionMatrix();
-      }
+  const { gl, camera, invalidate } = useThree();
+  useEffect(() => {
+    gl.setSize(width, height, false);
+    if (camera instanceof THREE.PerspectiveCamera) {
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
     }
-  });
+    invalidate();
+  }, [width, height, gl, camera, invalidate]);
   return null;
 };
 
@@ -42,7 +41,7 @@ export const FramixCanvas: React.FC<FramixCanvasProps> = ({
   style,
 }) => (
   <Canvas
-    frameloop="always"
+    frameloop="demand"
     gl={{ preserveDrawingBuffer: true, antialias: true }}
     dpr={1}
     camera={{

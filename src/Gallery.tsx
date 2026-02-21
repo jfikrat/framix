@@ -1,9 +1,11 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Player } from "./Player";
 import { RenderProgressModal } from "./components/RenderProgressModal";
 import { presets, type VideoConfig, type AnimationProps } from "./animations";
 import type { ProjectMeta, TimelineSegment } from "./templates/types";
 import type { AudioTrack } from "./audio/types";
+import type { InputSchema, InputValues } from "./inputs";
+import { resolveInputs } from "./inputs";
 
 // OTOMATiK PROJECT TARAMA - Vite glob import
 const templateModules = import.meta.glob<{
@@ -25,6 +27,7 @@ interface Project {
   configOverride?: Partial<VideoConfig>;
   audioTrack?: AudioTrack;
   timeline?: TimelineSegment[];
+  inputs?: InputSchema;
 }
 
 function loadProjects(): Project[] {
@@ -66,6 +69,7 @@ function loadProjects(): Project[] {
       configOverride: templateConfig,
       audioTrack,
       timeline,
+      inputs: meta.inputs,
     });
   }
 
@@ -129,6 +133,135 @@ const categoryBadge: Record<string, { label: string; color: string }> = {
 
 const config: VideoConfig = presets.instagramStory;
 
+// ─── Inputs Panel ─────────────────────────────────────
+const InputsPanel: React.FC<{
+  schema: InputSchema;
+  values: InputValues;
+  onChange: (key: string, value: string | number | boolean) => void;
+}> = ({ schema, values, onChange }) => {
+  const entries = Object.entries(schema);
+  if (!entries.length) return null;
+
+  const inputStyle: React.CSSProperties = {
+    background: "#1a1a1a",
+    border: "1px solid #333",
+    borderRadius: 6,
+    color: "white",
+    padding: "6px 8px",
+    fontSize: 12,
+    width: "100%",
+    outline: "none",
+  };
+
+  return (
+    <div
+      style={{
+        width: "100%",
+        background: "#111",
+        borderRadius: 12,
+        padding: 16,
+        marginTop: 12,
+        borderLeft: "3px solid #8b5cf6",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 600,
+          color: "#8b5cf6",
+          textTransform: "uppercase",
+          letterSpacing: 1.5,
+          marginBottom: 12,
+        }}
+      >
+        Template Inputs
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 16px" }}>
+        {entries.map(([key, field]) => (
+          <div key={key} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 11, color: "#666" }}>{field.label}</label>
+            {field.type === "text" && (
+              <input
+                type="text"
+                value={String(values[key] ?? field.default)}
+                placeholder={field.placeholder}
+                onChange={(e) => onChange(key, e.target.value)}
+                style={inputStyle}
+              />
+            )}
+            {field.type === "number" && (
+              <input
+                type="number"
+                value={Number(values[key] ?? field.default)}
+                min={field.min}
+                max={field.max}
+                onChange={(e) => onChange(key, parseFloat(e.target.value))}
+                style={inputStyle}
+              />
+            )}
+            {field.type === "color" && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <input
+                  type="color"
+                  value={String(values[key] ?? field.default)}
+                  onChange={(e) => onChange(key, e.target.value)}
+                  style={{ width: 28, height: 28, border: "none", borderRadius: 4, cursor: "pointer", padding: 0 }}
+                />
+                <span style={{ fontSize: 12, color: "#888", fontFamily: "monospace" }}>
+                  {String(values[key] ?? field.default)}
+                </span>
+              </div>
+            )}
+            {field.type === "boolean" && (
+              <div>
+                <button
+                  onClick={() => onChange(key, !(values[key] ?? field.default))}
+                  style={{
+                    width: 40,
+                    height: 22,
+                    borderRadius: 11,
+                    border: "none",
+                    background: (values[key] ?? field.default) ? "#8b5cf6" : "#333",
+                    cursor: "pointer",
+                    transition: "background 0.15s",
+                    position: "relative",
+                  }}
+                >
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: 3,
+                      width: 16,
+                      height: 16,
+                      borderRadius: "50%",
+                      background: "white",
+                      transition: "left 0.15s",
+                      left: (values[key] ?? field.default) ? 21 : 3,
+                    }}
+                  />
+                </button>
+              </div>
+            )}
+            {field.type === "select" && (
+              <select
+                value={String(values[key] ?? field.default)}
+                onChange={(e) => onChange(key, e.target.value)}
+                style={inputStyle}
+              >
+                {field.options?.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export const Gallery: React.FC = () => {
   const projects = useMemo(() => loadProjects(), []);
   const brandGroups = useMemo(() => groupByBrand(projects), [projects]);
@@ -137,6 +270,28 @@ export const Gallery: React.FC = () => {
   const [isRendering, setIsRendering] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [inputValues, setInputValues] = useState<InputValues>({});
+
+  // Reset input values when template changes
+  useEffect(() => {
+    setInputValues({});
+  }, [selectedId]);
+
+  const filteredGroups = useMemo(
+    () =>
+      brandGroups
+        .map((g) => ({
+          ...g,
+          projects: g.projects.filter(
+            (p) =>
+              p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+              (p.brand ?? "").toLowerCase().includes(searchQuery.toLowerCase()),
+          ),
+        }))
+        .filter((g) => g.projects.length > 0),
+    [brandGroups, searchQuery],
+  );
 
   const handleCloseModal = () => {
     setRenderJobId(null);
@@ -170,6 +325,19 @@ export const Gallery: React.FC = () => {
   const TemplateComponent = selected?.component;
   const activeConfig = selected?.configOverride ? { ...config, ...selected.configOverride } : config;
 
+  const resolvedInputs = selected?.inputs ? resolveInputs(selected.inputs, inputValues) : {};
+
+  const formatSubtitle = (() => {
+    const { width, height } = activeConfig;
+    if (width === height) return `${width}×${height} · Square`;
+    if (width < height) return `${width}×${height} · 9:16`;
+    return `${width}×${height} · 16:9`;
+  })();
+
+  const matchCount = searchQuery
+    ? filteredGroups.reduce((sum, g) => sum + g.projects.length, 0)
+    : null;
+
   if (!projects.length) {
     return <div style={{ color: "white", padding: 40 }}>No projects found</div>;
   }
@@ -183,7 +351,7 @@ export const Gallery: React.FC = () => {
             Framix
           </h1>
           <p style={{ textAlign: "center", fontSize: 14, color: "#666", marginBottom: 24 }}>
-            Instagram Story &bull; {projects.length} project &bull;
+            {formatSubtitle} &bull; {projects.length} project &bull;
             <span style={{ color: "#22c55e", marginLeft: 8 }}>Auto-discovery</span>
           </p>
         </>
@@ -207,17 +375,46 @@ export const Gallery: React.FC = () => {
               style={{
                 fontSize: 11,
                 color: "#555",
-                marginBottom: 10,
+                marginBottom: 8,
                 textTransform: "uppercase",
                 letterSpacing: 2,
                 padding: "0 8px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
               }}
             >
-              Projects ({projects.length})
+              <span>Projects</span>
+              <span style={{ color: matchCount !== null ? "#8b5cf6" : "#444", fontVariantNumeric: "tabular-nums" }}>
+                {matchCount !== null ? `${matchCount} / ${projects.length}` : projects.length}
+              </span>
             </h3>
 
-            <div style={{ overflowY: "auto", maxHeight: "calc(100vh - 220px)", flex: 1 }}>
-              {brandGroups.map((group) => (
+            {/* Search */}
+            <div style={{ padding: "0 4px", marginBottom: 8 }}>
+              <input
+                type="text"
+                placeholder="Filter projects..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: "100%",
+                  fontSize: 12,
+                  padding: "6px 10px",
+                  background: "#0a0a0a",
+                  border: "1px solid #333",
+                  borderRadius: 6,
+                  color: "white",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "#555")}
+                onBlur={(e) => (e.target.style.borderColor = "#333")}
+              />
+            </div>
+
+            <div style={{ overflowY: "auto", maxHeight: "calc(100vh - 260px)", flex: 1 }}>
+              {filteredGroups.map((group) => (
                 <div key={group.brand} style={{ marginBottom: 8 }}>
                   {/* Brand group header */}
                   <div
@@ -296,6 +493,12 @@ export const Gallery: React.FC = () => {
                   })}
                 </div>
               ))}
+
+              {filteredGroups.length === 0 && (
+                <div style={{ padding: "16px 12px", fontSize: 12, color: "#444", textAlign: "center" }}>
+                  No matches
+                </div>
+              )}
             </div>
 
             {/* Info */}
@@ -325,8 +528,20 @@ export const Gallery: React.FC = () => {
               isFullscreen={isFullscreen}
               onFullscreenChange={setIsFullscreen}
             >
-              {(frame) => <TemplateComponent frame={frame} config={activeConfig} />}
+              {(frame) => {
+                const C = TemplateComponent as React.FC<AnimationProps & { inputs?: InputValues }>;
+                return <C frame={frame} config={activeConfig} inputs={resolvedInputs} />;
+              }}
             </Player>
+          )}
+
+          {/* Inputs Panel */}
+          {!isFullscreen && selected?.inputs && Object.keys(selected.inputs).length > 0 && (
+            <InputsPanel
+              schema={selected.inputs}
+              values={resolvedInputs}
+              onChange={(key, value) => setInputValues((prev) => ({ ...prev, [key]: value }))}
+            />
           )}
 
           {/* Render Button */}

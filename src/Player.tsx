@@ -103,6 +103,7 @@ export const Player: React.FC<PlayerProps> = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [actualFps, setActualFps] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState<0.5 | 1 | 2>(1);
   const [viewportSize, setViewportSize] = useState({ w: window.innerWidth, h: window.innerHeight });
   const lastTimeRef = useRef<number>(0);
   const frameCountRef = useRef<number>(0);
@@ -121,15 +122,18 @@ export const Player: React.FC<PlayerProps> = ({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // ESC to exit fullscreen
+
+  // Pause when tab goes to background
   useEffect(() => {
-    if (!isFullscreen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onFullscreenChange?.(false);
+    const onVisibility = () => {
+      if (document.hidden) {
+        setIsPlaying(false);
+        audioRef.current?.pause();
+      }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [isFullscreen, onFullscreenChange]);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
 
   // Audio preview init
   useEffect(() => {
@@ -153,7 +157,7 @@ export const Player: React.FC<PlayerProps> = ({
 
     let animationId: number;
     let lastFrameTime = performance.now();
-    const frameDuration = 1000 / fps;
+    const frameDuration = 1000 / fps / playbackSpeed;
 
     const animate = (currentTime: number) => {
       const elapsed = currentTime - lastFrameTime;
@@ -185,7 +189,7 @@ export const Player: React.FC<PlayerProps> = ({
     return () => {
       cancelAnimationFrame(animationId);
     };
-  }, [isPlaying, fps, durationInFrames]);
+  }, [isPlaying, fps, durationInFrames, playbackSpeed]);
 
   const handlePlayPause = useCallback(() => {
     if (frame >= durationInFrames - 1) {
@@ -223,6 +227,39 @@ export const Player: React.FC<PlayerProps> = ({
     setIsPlaying(false);
     audioRef.current?.stop();
   };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+      switch (e.key) {
+        case " ":
+          e.preventDefault();
+          handlePlayPause();
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          handleSeek(Math.max(0, frame - (e.shiftKey ? 10 : 1)));
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          handleSeek(Math.min(durationInFrames - 1, frame + (e.shiftKey ? 10 : 1)));
+          break;
+        case "r":
+        case "Home":
+          handleReset();
+          break;
+        case "f":
+          onFullscreenChange?.(!isFullscreen);
+          break;
+        case "Escape":
+          if (isFullscreen) onFullscreenChange?.(false);
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [frame, isFullscreen, durationInFrames, handlePlayPause, onFullscreenChange]);
 
   const currentTime = (frame / fps).toFixed(2);
   const totalTime = (durationInFrames / fps).toFixed(2);
@@ -297,7 +334,7 @@ export const Player: React.FC<PlayerProps> = ({
             transition: "background 0.15s",
           }}
         >
-          {isPlaying ? "Pause" : "Play"}
+          {isPlaying ? "Pause [Space]" : "Play [Space]"}
         </button>
 
         <button
@@ -311,9 +348,31 @@ export const Player: React.FC<PlayerProps> = ({
             color: "white",
             cursor: "pointer",
           }}
+          title="Reset [R]"
         >
           Reset
         </button>
+
+        {/* Speed buttons */}
+        {([0.5, 1, 2] as const).map((speed) => (
+          <button
+            key={speed}
+            onClick={() => setPlaybackSpeed(speed)}
+            style={{
+              padding: "10px 10px",
+              fontSize: 12,
+              background: playbackSpeed === speed ? "#8b5cf612" : "#2a2a2a",
+              border: `1px solid ${playbackSpeed === speed ? "#8b5cf640" : "transparent"}`,
+              borderRadius: 8,
+              color: playbackSpeed === speed ? "#8b5cf6" : "#999",
+              cursor: "pointer",
+              fontWeight: 600,
+              lineHeight: 1,
+            }}
+          >
+            {speed}×
+          </button>
+        ))}
 
         {audioTrack && (
           <button
@@ -345,7 +404,7 @@ export const Player: React.FC<PlayerProps> = ({
             color: isFullscreen ? "#60a5fa" : "white",
             cursor: "pointer",
           }}
-          title={isFullscreen ? "Exit Fullscreen (ESC)" : "Fullscreen"}
+          title={isFullscreen ? "Exit Fullscreen [ESC]" : "Fullscreen [F]"}
         >
           {isFullscreen ? "Exit" : "Full"}
         </button>
