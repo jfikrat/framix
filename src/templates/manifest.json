@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-02-22T06:07:09.853Z",
+  "generatedAt": "2026-02-22T09:21:24.150Z",
   "templates": [
     {
       "id": "ai-timeline",
@@ -290,6 +290,22 @@
       "color": "#8b5cf6",
       "brand": "cobrain",
       "file": "HelmBrowserDemo.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "internet-pulse",
+      "name": "Internet Pulse",
+      "category": "social",
+      "color": "#3b82f6",
+      "file": "InternetPulse.tsx",
+      "hasInputs": false
+    },
+    {
+      "id": "internet-pulse-v2",
+      "name": "Internet Pulse II",
+      "category": "social",
+      "color": "#C5B396",
+      "file": "InternetPulseV2.tsx",
       "hasInputs": false
     },
     {
