@@ -3,6 +3,7 @@ import * as readline from 'node:readline';
 import { join, resolve } from 'node:path';
 import { readdir } from 'node:fs/promises';
 import { listJobs } from './src/store';
+import puppeteer from 'puppeteer';
 
 // Configuration
 const SERVER_URL = 'http://localhost:3001';
@@ -120,6 +121,22 @@ const TOOLS: McpTool[] = [
       required: ["filename"],
     },
   },
+  {
+    name: "screenshot_frame",
+    description: "Take a Puppeteer screenshot of specific frame(s) and return the images directly. Use this to visually validate template appearance during design — much faster than a full render. Requires dev server running (bun run dev).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        templateId: { type: "string", description: "Template ID (kebab-case slug)" },
+        frames: {
+          type: "array",
+          items: { type: "number" },
+          description: "Frame numbers to capture. Default: [0, 90, 180, 270]",
+        },
+      },
+      required: ["templateId"],
+    },
+  },
 ];
 
 // ─── Manifest Loader ─────────────────────────────────
@@ -147,6 +164,21 @@ async function findTemplateEntry(templateId: string): Promise<ManifestEntry | nu
   const templates = await loadManifest();
   return templates.find(t => t.id === templateId) ?? null;
 }
+
+// ─── Content Types ────────────────────────────────────
+
+type TextContent = { type: 'text'; text: string };
+type ImageContent = { type: 'image'; data: string; mimeType: string };
+type ContentBlock = TextContent | ImageContent;
+
+// Tools that return raw content blocks (not wrapped in text)
+type RawResult = { __raw: true; content: ContentBlock[] };
+
+function isRaw(v: unknown): v is RawResult {
+  return typeof v === 'object' && v !== null && (v as any).__raw === true;
+}
+
+const DEV_SERVER_URL = 'http://localhost:4200';
 
 // ─── Tool Handlers ────────────────────────────────────
 
@@ -230,6 +262,50 @@ async function handleToolCall(name: string, args: any): Promise<unknown> {
       };
     }
 
+    case 'screenshot_frame': {
+      const { templateId, frames: requestedFrames } = args as { templateId: string; frames?: number[] };
+      const frames = Array.isArray(requestedFrames) && requestedFrames.length > 0
+        ? requestedFrames
+        : [0, 90, 180, 270];
+
+      const browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'],
+      });
+
+      try {
+        const page = await browser.newPage();
+        await page.goto(`${DEV_SERVER_URL}?render=${templateId}`, {
+          waitUntil: 'networkidle0',
+          timeout: 30000,
+        });
+        await page.waitForFunction(() => (window as any).__renderReady === true, { timeout: 10000 });
+
+        const config: { width: number; height: number } = await page.evaluate(
+          () => (window as any).__config
+        );
+        await page.setViewport({ width: config.width, height: config.height, deviceScaleFactor: 1 });
+
+        const content: ContentBlock[] = [];
+        content.push({ type: 'text', text: `Template: ${templateId} (${config.width}×${config.height})` });
+
+        for (const f of frames) {
+          await page.evaluate((n) => (window as any).__setFrame(n), f);
+          await new Promise((r) => setTimeout(r, 20));
+
+          const buffer = await page.screenshot({ type: 'jpeg', quality: 90 }) as Buffer;
+          const base64 = buffer.toString('base64');
+
+          content.push({ type: 'text', text: `Frame ${f}:` });
+          content.push({ type: 'image', data: base64, mimeType: 'image/jpeg' });
+        }
+
+        return { __raw: true, content } as RawResult;
+      } finally {
+        await browser.close();
+      }
+    }
+
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -288,7 +364,9 @@ rl.on('line', async (line) => {
             jsonrpc: '2.0',
             id: request.id,
             result: {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+              content: isRaw(result)
+                ? result.content
+                : [{ type: 'text', text: JSON.stringify(result, null, 2) }],
               isError: false,
             },
           });
